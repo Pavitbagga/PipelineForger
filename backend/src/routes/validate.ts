@@ -13,6 +13,15 @@ const COMPATIBILITY: Record<string, string[]> = {
 
 router.post("/", (req, res) => {
   const { sourceType, targetType } = req.body;
+
+  // Validate required fields
+  if (!sourceType || !targetType) {
+    res.status(400).json({
+      error: "Both sourceType and targetType are required",
+    });
+    return;
+  }
+
   const allowed = COMPATIBILITY[sourceType] || [];
   const compatible = allowed.includes(targetType);
   res.json({
