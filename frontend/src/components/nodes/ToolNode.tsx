@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
 
-const ToolNode = ({ data, selected }: NodeProps<NodeData>) => {
+const ToolNode = ({ data: rawData, selected }: NodeProps) => {
+  const data = rawData as NodeData;
   const color = '#f59e0b';
 
   const toolIcons: Record<string, string> = {
@@ -66,7 +67,7 @@ const ToolNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label || data.config?.label || "Tool"}
+        {data.label || "Tool"}
       </div>
 
       {/* Tool Type */}

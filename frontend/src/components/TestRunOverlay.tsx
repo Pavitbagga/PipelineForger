@@ -18,7 +18,7 @@ type LogEntry = {
 export const TestRunOverlay = ({ isActive, onClose }: TestRunOverlayProps) => {
   const { nodes, edges, updateNode } = usePipelineStore();
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [testInput, setTestInput] = useState('Hello, test my pipeline!');
+  const [testInput] = useState('Hello, test my pipeline!');
   const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {

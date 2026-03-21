@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
 
-const OutputNode = ({ data, selected }: NodeProps<NodeData>) => {
+const OutputNode = ({ data: rawData, selected }: NodeProps) => {
+  const data = rawData as NodeData;
   const color = '#f43f5e';
 
   return (
@@ -52,7 +53,7 @@ const OutputNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '8px',
         }}
       >
-        {data.label || data.config?.label || "Output"}
+        {data.label || "Output"}
       </div>
 
       {/* Status Indicator */}

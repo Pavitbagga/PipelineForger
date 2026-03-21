@@ -4,6 +4,7 @@ import {
   mockGenerateCode,
   mockTestRun,
   mockLoadTemplate,
+  mockInterpretSketch,
 } from '../mocks/api';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
@@ -180,5 +181,25 @@ export const apiClient = {
     }
     const response = await fetch(`${API_URL}/api/template/${templateName}`);
     return response.json();
+  },
+
+  interpretSketch: async (
+    imageBase64: string,
+    feedback?: string
+  ): Promise<{ interpretation: string; nodes: any[]; edges: any[] }> => {
+    if (USE_MOCK) {
+      return mockInterpretSketch(imageBase64, feedback);
+    }
+    const response = await fetch(`${API_URL}/api/interpret-sketch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64, feedback }),
+    });
+    const parsed = await response.json();
+    return {
+      interpretation: parsed.interpretation ?? '',
+      nodes: (parsed.nodes ?? []).map(transformBackendNode),
+      edges: parsed.edges ?? [],
+    };
   },
 };

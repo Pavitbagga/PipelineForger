@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
 
-const RouterNode = ({ data, selected }: NodeProps<NodeData>) => {
+const RouterNode = ({ data: rawData, selected }: NodeProps) => {
+  const data = rawData as NodeData;
   const color = '#22d3ee';
 
   return (
@@ -52,7 +53,7 @@ const RouterNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label || data.config?.label || "Router"}
+        {data.label || "Router"}
       </div>
 
       {/* Condition Preview */}

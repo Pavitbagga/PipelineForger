@@ -97,7 +97,7 @@ if __name__ == "__main__":
   });
 };
 
-export const mockTestRun = (pipeline: any, input: string) => {
+export const mockTestRun = (_pipeline: any, input: string) => {
   return new Promise((resolve) => {
     setTimeout(() => {
       resolve({
@@ -133,6 +133,48 @@ export const mockTestRun = (pipeline: any, input: string) => {
         ],
       });
     }, 500);
+  });
+};
+
+export const mockInterpretSketch = (_imageBase64: string, feedback?: string) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        interpretation: feedback
+          ? `Refined based on feedback "${feedback}": A pipeline with an input node connected to a Claude LLM node, which routes through a router and feeds into an output node.`
+          : 'A pipeline with an input node connected to a Claude LLM node, which feeds into an output node.',
+        nodes: [
+          {
+            id: 'node_1',
+            type: 'input',
+            position: { x: 100, y: 300 },
+            data: { label: 'Input', status: 'idle' },
+          },
+          {
+            id: 'node_2',
+            type: 'llm',
+            position: { x: 350, y: 300 },
+            data: {
+              label: 'LLM',
+              model: 'claude-sonnet',
+              systemPrompt: 'You are a helpful assistant.',
+              temperature: 0.7,
+              status: 'idle',
+            },
+          },
+          {
+            id: 'node_3',
+            type: 'output',
+            position: { x: 600, y: 300 },
+            data: { label: 'Output', status: 'idle' },
+          },
+        ] as Node<NodeData>[],
+        edges: [
+          { id: 'e1-2', source: 'node_1', target: 'node_2' },
+          { id: 'e2-3', source: 'node_2', target: 'node_3' },
+        ] as Edge[],
+      });
+    }, 1800);
   });
 };
 

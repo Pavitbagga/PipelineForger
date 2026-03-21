@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
 
-const AgentNode = ({ data, selected }: NodeProps<NodeData>) => {
+const AgentNode = ({ data: rawData, selected }: NodeProps) => {
+  const data = rawData as NodeData;
   const color = '#8b5cf6';
 
   return (
@@ -52,7 +53,7 @@ const AgentNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label || data.config?.label || "Agent"}
+        {data.label || "Agent"}
       </div>
 
       {/* Max Steps */}

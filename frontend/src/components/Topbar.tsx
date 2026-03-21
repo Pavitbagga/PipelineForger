@@ -5,9 +5,10 @@ import { apiClient } from '../lib/apiClient';
 type TopbarProps = {
   onShipIt: () => void;
   onTestRun: () => void;
+  onDraw: () => void;
 };
 
-export const Topbar = ({ onShipIt, onTestRun }: TopbarProps) => {
+export const Topbar = ({ onShipIt, onTestRun, onDraw }: TopbarProps) => {
   const [intent, setIntent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const { nodes, setNodes, setEdges, addCopilotMessage } = usePipelineStore();
@@ -137,6 +138,36 @@ export const Topbar = ({ onShipIt, onTestRun }: TopbarProps) => {
 
       {/* Action Buttons */}
       <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onDraw}
+          style={{
+            height: '40px',
+            padding: '0 20px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-muted)',
+            fontSize: '14px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'JetBrains Mono, monospace',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'border-color 0.2s, color 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+          }}
+        >
+          <span>✏️</span>
+          <span>Draw</span>
+        </button>
         <button
           onClick={onTestRun}
           disabled={nodes.length === 0}

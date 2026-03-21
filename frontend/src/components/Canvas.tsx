@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
@@ -35,7 +36,6 @@ export const Canvas = () => {
   const {
     nodes: storeNodes,
     edges: storeEdges,
-    setNodes: setStoreNodes,
     setEdges: setStoreEdges,
     addNode,
     setSelectedNodeId,
@@ -172,7 +172,7 @@ export const Canvas = () => {
         }}
       >
         <Background
-          variant="dots"
+          variant={BackgroundVariant.Dots}
           gap={20}
           size={1}
           color="rgba(255, 255, 255, 0.1)"

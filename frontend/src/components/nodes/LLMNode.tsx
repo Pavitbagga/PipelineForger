@@ -2,7 +2,8 @@ import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
 
-const LLMNode = ({ data, selected }: NodeProps<NodeData>) => {
+const LLMNode = ({ data: rawData, selected }: NodeProps) => {
+  const data = rawData as NodeData;
   const color = '#6366f1';
 
   const modelNames: Record<string, string> = {
@@ -58,7 +59,7 @@ const LLMNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label || data.config?.label || "LLM"}
+        {data.label || "LLM"}
       </div>
 
       {/* Model Name */}

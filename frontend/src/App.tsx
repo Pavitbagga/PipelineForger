@@ -6,12 +6,14 @@ import { CopilotPanel } from './components/CopilotPanel';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ShipItModal } from './components/ShipItModal';
 import { TestRunOverlay } from './components/TestRunOverlay';
+import { DrawingCanvasModal } from './components/DrawingCanvasModal';
 import { usePipelineStore } from './store/pipelineStore';
 
 function App() {
   const { selectedNodeId } = usePipelineStore();
   const [isShipItModalOpen, setIsShipItModalOpen] = useState(false);
   const [isTestRunActive, setIsTestRunActive] = useState(false);
+  const [isDrawingOpen, setIsDrawingOpen] = useState(false);
 
   const handleShipIt = () => {
     setIsShipItModalOpen(true);
@@ -31,7 +33,7 @@ function App() {
         overflow: 'hidden',
       }}
     >
-      <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} />
+      <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} onDraw={() => setIsDrawingOpen(true)} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar />
         <Canvas />
@@ -47,6 +49,9 @@ function App() {
         isActive={isTestRunActive}
         onClose={() => setIsTestRunActive(false)}
       />
+
+      {/* Drawing Canvas Modal */}
+      {isDrawingOpen && <DrawingCanvasModal onClose={() => setIsDrawingOpen(false)} />}
     </div>
   );
 }
