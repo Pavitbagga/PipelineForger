@@ -95,13 +95,9 @@ export const apiClient = {
     const response = await fetch(`${API_URL}/api/generate-pipeline`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: intent }), // backend expects "description"
+      body: JSON.stringify({ intent }),
     });
-    const parsed = await response.json();
-    return {
-      ...parsed,
-      nodes: (parsed.nodes ?? []).map(transformBackendNode),
-    };
+    return response.json();
   },
 
   validateConnection: async (sourceType: string, targetType: string) => {

@@ -9,6 +9,7 @@ const RouterNode = ({ data: rawData, selected }: NodeProps) => {
   return (
     <div
       style={{
+        position: 'relative',
         background: 'var(--bg-card)',
         border: `1px solid ${selected ? color : 'var(--border)'}`,
         borderLeft: `3px solid ${color}`,
