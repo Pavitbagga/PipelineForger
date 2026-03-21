@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg-base: #0a0a0f;
+  --bg-canvas: #0e0e16;
+  --bg-panel: #13131f;
+  --bg-card: #1a1a2e;
+  --border: #ffffff12;
+  --accent: #6366f1;
+  --accent-cyan: #22d3ee;
+  --text-primary: #f0f0ff;
+  --text-muted: #6b6b8a;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #f43f5e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: 'Syne', sans-serif;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* React Flow custom styles */
+.react-flow__node {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-dasharray: 5, 5;
+  animation: dash 20s linear infinite;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-panel);
+}
+
+.react-flow__handle-left {
+  background: #6b6b8a;
+}
+
+.react-flow__minimap {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+}
+
+.react-flow__controls {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+}
+
+.react-flow__controls button {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.react-flow__controls button:hover {
+  background: var(--accent);
+}
