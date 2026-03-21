@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ReactFlowProvider } from '@xyflow/react';
 import { Topbar } from './components/Topbar';
 import { Sidebar } from './components/Sidebar';
 import { Canvas } from './components/Canvas';
@@ -36,7 +37,9 @@ function App() {
       <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} onDraw={() => setIsDrawingOpen(true)} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar />
-        <Canvas />
+        <ReactFlowProvider>
+          <Canvas />
+        </ReactFlowProvider>
         {/* Show ConfigPanel when node is selected, otherwise show CopilotPanel */}
         {selectedNodeId ? <ConfigPanel /> : <CopilotPanel />}
       </div>

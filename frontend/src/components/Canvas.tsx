@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -7,10 +7,13 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   type Connection,
   type Node,
   type Edge,
+  type NodeChange,
+  type EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { usePipelineStore } from '../store/pipelineStore';
@@ -42,10 +45,13 @@ export const Canvas = () => {
     addCopilotMessage,
   } = usePipelineStore();
 
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const { screenToFlowPosition } = useReactFlow();
+
   const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges);
 
-  // Sync store with local state
+  // Sync store TO local state (when store changes from outside)
   useEffect(() => {
     setNodes(storeNodes);
   }, [storeNodes, setNodes]);
@@ -53,6 +59,32 @@ export const Canvas = () => {
   useEffect(() => {
     setEdges(storeEdges);
   }, [storeEdges, setEdges]);
+
+  // Wrap onNodesChange to sync back TO store (BUG FIX #2)
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(changes);
+      // After React Flow processes the changes, sync back to store
+      setNodes((currentNodes) => {
+        setStoreNodes(currentNodes);
+        return currentNodes;
+      });
+    },
+    [onNodesChange, setNodes, setStoreNodes]
+  );
+
+  // Wrap onEdgesChange to sync back TO store (BUG FIX #2)
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      onEdgesChange(changes);
+      // After React Flow processes the changes, sync back to store
+      setEdges((currentEdges) => {
+        setStoreEdges(currentEdges);
+        return currentEdges;
+      });
+    },
+    [onEdgesChange, setEdges, setStoreEdges]
+  );
 
   const onConnect = useCallback(
     async (connection: Connection) => {
@@ -80,15 +112,18 @@ export const Canvas = () => {
         id: `e${connection.source}-${connection.target}`,
       } as Edge;
 
-      setEdges((eds) => addEdge(newEdge, eds));
-      setStoreEdges([...edges, newEdge]);
+      setEdges((eds) => {
+        const updatedEdges = addEdge(newEdge, eds);
+        setStoreEdges(updatedEdges);
+        return updatedEdges;
+      });
 
       addCopilotMessage({
         role: 'claude',
         text: result.message,
       });
     },
-    [nodes, edges, setEdges, setStoreEdges, addCopilotMessage]
+    [nodes, setEdges, setStoreEdges, addCopilotMessage]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -103,11 +138,12 @@ export const Canvas = () => {
       const type = event.dataTransfer.getData('application/reactflow');
       if (!type) return;
 
-      const reactFlowBounds = event.currentTarget.getBoundingClientRect();
-      const position = {
-        x: event.clientX - reactFlowBounds.left - 75,
-        y: event.clientY - reactFlowBounds.top - 40,
-      };
+      // BUG FIX #1: Use screenToFlowPosition for accurate positioning
+      // This accounts for zoom and pan transforms
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
 
       const newNode: Node<NodeData> = {
         id: `node_${Date.now()}`,
@@ -136,15 +172,20 @@ export const Canvas = () => {
         },
       };
 
+      // Update both React Flow state and Zustand store
+      setNodes((nds) => {
+        const updatedNodes = [...nds, newNode];
+        setStoreNodes(updatedNodes);
+        return updatedNodes;
+      });
       addNode(newNode);
-      setNodes((nds) => [...nds, newNode]);
 
       addCopilotMessage({
         role: 'claude',
         text: `${type.toUpperCase()} node added. Click it to configure.`,
       });
     },
-    [addNode, setNodes, addCopilotMessage]
+    [screenToFlowPosition, setNodes, setStoreNodes, addNode, addCopilotMessage]
   );
 
   const onNodeClick = useCallback(
@@ -155,12 +196,15 @@ export const Canvas = () => {
   );
 
   return (
-    <div style={{ flex: 1, background: 'var(--bg-canvas)', position: 'relative' }}>
+    <div
+      ref={reactFlowWrapper}
+      style={{ flex: 1, background: 'var(--bg-canvas)', position: 'relative' }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
         onDrop={onDrop}
         onDragOver={onDragOver}
