@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { usePipelineStore } from '../store/pipelineStore';
-import { apiClient } from '../lib/apiClient';
+import { apiClient, type RunEvent } from '../lib/apiClient';
 
 type TestRunOverlayProps = {
   isActive: boolean;
@@ -32,18 +32,37 @@ export const TestRunOverlay = ({ isActive, onClose }: TestRunOverlayProps) => {
     setLogs([]);
 
     try {
-      const result: any = await apiClient.testRun({ nodes, edges }, testInput);
-
-      // Simulate execution by processing logs sequentially
-      for (const log of result.logs) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Update node status
-        updateNode(log.nodeId, { status: log.status });
-
-        // Add log entry
-        setLogs((prev) => [...prev, log]);
-      }
+      await apiClient.testRun({ nodes, edges }, testInput, (event: RunEvent) => {
+        if (event.status === 'running') {
+          updateNode((event as any).nodeId, { status: 'running' });
+        } else if (event.status === 'success') {
+          const node = nodes.find((n) => n.id === (event as any).nodeId);
+          updateNode((event as any).nodeId, { status: 'done' });
+          setLogs((prev) => [
+            ...prev,
+            {
+              nodeId: (event as any).nodeId,
+              nodeName: (node?.data as any)?.label ?? (event as any).nodeId,
+              status: 'done' as const,
+              output: (event as any).output ?? '',
+              timestamp: Date.now(),
+            },
+          ]);
+        } else if (event.status === 'error') {
+          const node = nodes.find((n) => n.id === (event as any).nodeId);
+          updateNode((event as any).nodeId, { status: 'error' });
+          setLogs((prev) => [
+            ...prev,
+            {
+              nodeId: (event as any).nodeId,
+              nodeName: (node?.data as any)?.label ?? (event as any).nodeId,
+              status: 'error' as const,
+              output: (event as any).error ?? 'Unknown error',
+              timestamp: Date.now(),
+            },
+          ]);
+        }
+      });
     } catch (error) {
       console.error('Test run failed:', error);
     } finally {
