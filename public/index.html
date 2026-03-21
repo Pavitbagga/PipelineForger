@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline API Tester</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222636;
+      --border: #2e3347;
+      --accent: #7c6af7;
+      --accent-dim: #4a3fa0;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ── */
+    .shell { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .sidebar-logo h1 { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: .5px; }
+    .sidebar-logo p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .nav-group { margin-bottom: 8px; }
+    .nav-group-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 4px 20px 6px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 20px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--muted);
+      border-left: 3px solid transparent;
+      transition: all .15s;
+      user-select: none;
+    }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: var(--surface2); color: var(--text); border-left-color: var(--accent); }
+    .nav-item .method-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 3px;
+      background: var(--accent-dim);
+      color: #c4b9ff;
+      letter-spacing: .5px;
+    }
+    .nav-item .method-badge.sse {
+      background: #1a3a2a;
+      color: var(--green);
+    }
+
+    .main { flex: 1; padding: 32px; max-width: 900px; }
+
+    /* ── Panel ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .panel-header { margin-bottom: 24px; }
+    .panel-header h2 { font-size: 20px; font-weight: 700; }
+    .panel-header .route {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    .panel-header .route .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--accent);
+      color: #fff;
+    }
+    .panel-header .route .badge.sse { background: var(--green); color: #000; }
+    .panel-header p { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+    /* ── Form ── */
+    .form-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .form-section h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); margin-bottom: 14px; }
+
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; margin-top: 12px; }
+    label:first-of-type { margin-top: 0; }
+
+    input[type="text"], select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 9px 12px;
+      font-family: var(--font-mono);
+      transition: border-color .15s;
+      resize: vertical;
+    }
+    input[type="text"]:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    select { cursor: pointer; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { opacity: .88; }
+    .btn-danger  { background: var(--red);    color: #fff; }
+    .btn-danger:hover { opacity: .88; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .send-row { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+
+    /* ── Response ── */
+    .response-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .response-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+    .status-pill.ok      { background: #14532d; color: var(--green); }
+    .status-pill.error   { background: #450a0a; color: var(--red); }
+    .status-pill.pending { background: #1c1f2e; color: var(--muted); }
+
+    .response-body {
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 500px;
+      overflow-y: auto;
+      color: #a8c0e8;
+      line-height: 1.7;
+    }
+
+    /* ── SSE Stream ── */
+    .stream-events { display: flex; flex-direction: column; gap: 6px; }
+    .stream-event {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--surface2);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      animation: fadeIn .2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .stream-event .ev-badge {
+      flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+    .ev-running  { background: #1c2e4a; color: #60a5fa; }
+    .ev-success  { background: #14532d; color: var(--green); }
+    .ev-error    { background: #450a0a; color: var(--red); }
+    .ev-complete { background: #3b1f6b; color: #c084fc; }
+    .ev-fatal    { background: #450a0a; color: var(--red); }
+    .ev-text { color: var(--text); flex: 1; }
+    .ev-output { color: var(--muted); margin-top: 3px; font-size: 11px; }
+
+    /* ── Copy btn ── */
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--accent); }
+
+    /* ── Health dot ── */
+    .health-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+      margin-right: 6px;
+    }
+    .health-dot.up   { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .health-dot.down { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+
+    .health-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      margin-top: auto;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Pipeline API</h1>
+      <p>CBC Hackathon 26'</p>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Core</div>
+      <div class="nav-item active" data-panel="intent">
+        <span class="method-badge">POST</span> /api/intent
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Co-Pilot</div>
+      <div class="nav-item" data-panel="node-drop">
+        <span class="method-badge">POST</span> /copilot/node-drop
+      </div>
+      <div class="nav-item" data-panel="edge-draw">
+        <span class="method-badge">POST</span> /copilot/edge-draw
+      </div>
+      <div class="nav-item" data-panel="scan">
+        <span class="method-badge">POST</span> /copilot/scan
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Execution</div>
+      <div class="nav-item" data-panel="run">
+        <span class="method-badge sse">SSE</span> /api/run
+      </div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Export</div>
+      <div class="nav-item" data-panel="ship">
+        <span class="method-badge">POST</span> /api/ship
+      </div>
+    </div>
+
+    <div style="flex:1"></div>
+    <div class="health-bar">
+      <span class="health-dot" id="health-dot"></span>
+      <span id="health-label">Checking...</span>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <main class="main">
+
+    <!-- /api/intent -->
+    <div class="panel active" id="panel-intent">
+      <div class="panel-header">
+        <h2>Generate Pipeline from Description</h2>
+        <div class="route"><span class="badge">POST</span>/api/intent</div>
+        <p>Describe what you want your AI pipeline to do. Claude will return a structured node/edge graph.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>description</label>
+        <textarea id="intent-desc" rows="3" placeholder="e.g. Summarize a webpage then translate it to French"></textarea>
+        <div class="send-row">
+          <button class="btn btn-primary" onclick="sendIntent()">&#9654; Send Request</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Response
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="intent-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('intent-body')">Copy</button>
+          </div>
+        </div>
+        <div class="response-body" id="intent-body">// response will appear here</div>
+      </div>
+    </div>
+
+    <!-- /api/copilot/node-drop -->
+    <div class="panel" id="panel-node-drop">
+      <div class="panel-header">
+        <h2>Node Drop Suggestion</h2>
+        <div class="route"><span class="badge">POST</span>/api/copilot/node-drop</div>
+        <p>Returns a quick 1-2 sentence tip when a user drops a new node onto the canvas.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>nodeType</label>
+        <select id="nd-type">
+          <option value="input">input</option>
+          <option value="llm">llm</option>
+          <option value="tool">tool</option>
+          <option value="agent">agent</option>
+          <option value="router">router</option>
+          <option value="output">output</option>
+        </select>
+        <div class="send-row">
+          <button class="btn btn-primary" onclick="sendNodeDrop()">&#9654; Send Request</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Response
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="nd-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('nd-body')">Copy</button>
+          </div>
+        </div>
+        <div class="response-body" id="nd-body">// response will appear here</div>
+      </div>
+    </div>
+
+    <!-- /api/copilot/edge-draw -->
+    <div class="panel" id="panel-edge-draw">
+      <div class="panel-header">
+        <h2>Edge Compatibility Check</h2>
+        <div class="route"><span class="badge">POST</span>/api/copilot/edge-draw</div>
+        <p>Checks if connecting two node types is valid. Returns a human-friendly explanation if not.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>sourceType</label>
+        <select id="ed-source">
+          <option value="input">input</option>
+          <option value="llm">llm</option>
+          <option value="tool">tool</option>
+          <option value="agent">agent</option>
+          <option value="router">router</option>
+          <option value="output">output</option>
+        </select>
+        <label>targetType</label>
+        <select id="ed-target">
+          <option value="llm">llm</option>
+          <option value="input">input</option>
+          <option value="tool">tool</option>
+          <option value="agent">agent</option>
+          <option value="router">router</option>
+          <option value="output">output</option>
+        </select>
+        <div class="send-row">
+          <button class="btn btn-primary" onclick="sendEdgeDraw()">&#9654; Send Request</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Response
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="ed-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('ed-body')">Copy</button>
+          </div>
+        </div>
+        <div class="response-body" id="ed-body">// response will appear here</div>
+      </div>
+    </div>
+
+    <!-- /api/copilot/scan -->
+    <div class="panel" id="panel-scan">
+      <div class="panel-header">
+        <h2>Pipeline Safety Scan</h2>
+        <div class="route"><span class="badge">POST</span>/api/copilot/scan</div>
+        <p>Analyses the full pipeline for data leakage, prompt injection, bias, and privacy risks.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>nodes (JSON array)</label>
+        <textarea id="scan-nodes" rows="8" placeholder='[{"id":"node_1","type":"input","position":{"x":100,"y":300},"config":{},"inputs":[],"outputs":["text"]},{"id":"node_2","type":"llm","position":{"x":350,"y":300},"config":{"systemPrompt":"You are helpful","temperature":0.7},"inputs":["text"],"outputs":["text"]}]'></textarea>
+        <label>edges (JSON array)</label>
+        <textarea id="scan-edges" rows="3" placeholder='[{"id":"edge_1","source":"node_1","target":"node_2"}]'></textarea>
+        <div class="send-row">
+          <button class="btn btn-primary" onclick="sendScan()">&#9654; Send Request</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Response
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="scan-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('scan-body')">Copy</button>
+          </div>
+        </div>
+        <div class="response-body" id="scan-body">// response will appear here</div>
+      </div>
+    </div>
+
+    <!-- /api/run (SSE) -->
+    <div class="panel" id="panel-run">
+      <div class="panel-header">
+        <h2>Run Pipeline (Live Stream)</h2>
+        <div class="route"><span class="badge sse">SSE</span>/api/run</div>
+        <p>Executes the pipeline node-by-node. Events stream in real time — each node lights up as it runs.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>input (string passed to the first node)</label>
+        <input type="text" id="run-input" placeholder="Hello! Summarize the latest AI news." />
+        <label>nodes (JSON array)</label>
+        <textarea id="run-nodes" rows="8" placeholder='[{"id":"node_1","type":"input","position":{"x":100,"y":300},"config":{},"inputs":[],"outputs":["text"]},{"id":"node_2","type":"llm","position":{"x":350,"y":300},"config":{"systemPrompt":"You are a helpful assistant.","temperature":0.7},"inputs":["text"],"outputs":["text"]},{"id":"node_3","type":"output","position":{"x":600,"y":300},"config":{},"inputs":["text"],"outputs":[]}]'></textarea>
+        <label>edges (JSON array)</label>
+        <textarea id="run-edges" rows="3" placeholder='[{"id":"e1","source":"node_1","target":"node_2"},{"id":"e2","source":"node_2","target":"node_3"}]'></textarea>
+        <div class="send-row">
+          <button class="btn btn-primary" id="run-btn" onclick="sendRun()">&#9654; Run Pipeline</button>
+          <button class="btn btn-danger" id="stop-btn" onclick="stopRun()" style="display:none">&#9632; Stop</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Live Events
+          <span id="run-status" class="status-pill pending">Idle</span>
+        </div>
+        <div class="response-body" id="run-body">
+          <div class="stream-events" id="stream-events"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- /api/ship -->
+    <div class="panel" id="panel-ship">
+      <div class="panel-header">
+        <h2>Export Pipeline as Python</h2>
+        <div class="route"><span class="badge">POST</span>/api/ship</div>
+        <p>Generates clean, runnable Python code from the pipeline. Lists required environment variables.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>nodes (JSON array)</label>
+        <textarea id="ship-nodes" rows="8" placeholder='[{"id":"node_1","type":"input","position":{"x":100,"y":300},"config":{},"inputs":[],"outputs":["text"]},{"id":"node_2","type":"llm","position":{"x":350,"y":300},"config":{"systemPrompt":"You are helpful","temperature":0.7},"inputs":["text"],"outputs":["text"]},{"id":"node_3","type":"output","position":{"x":600,"y":300},"config":{},"inputs":["text"],"outputs":[]}]'></textarea>
+        <label>edges (JSON array)</label>
+        <textarea id="ship-edges" rows="3" placeholder='[{"id":"e1","source":"node_1","target":"node_2"},{"id":"e2","source":"node_2","target":"node_3"}]'></textarea>
+        <div class="send-row">
+          <button class="btn btn-primary" onclick="sendShip()">&#9654; Generate Code</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Response
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="ship-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('ship-body')">Copy</button>
+          </div>
+        </div>
+        <div class="response-body" id="ship-body">// response will appear here</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const BASE = window.location.origin;
+
+  // ── Nav ──────────────────────────────────────────────────────────────────
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      item.classList.add('active');
+      document.getElementById('panel-' + item.dataset.panel).classList.add('active');
+    });
+  });
+
+  // ── Health check ─────────────────────────────────────────────────────────
+  async function checkHealth() {
+    const dot   = document.getElementById('health-dot');
+    const label = document.getElementById('health-label');
+    try {
+      const r = await fetch(BASE + '/health');
+      if (r.ok) { dot.className = 'health-dot up';   label.textContent = 'API online'; }
+      else       { dot.className = 'health-dot down'; label.textContent = 'API error'; }
+    } catch {    dot.className = 'health-dot down';   label.textContent = 'Unreachable'; }
+  }
+  checkHealth();
+  setInterval(checkHealth, 10000);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function setStatus(id, code) {
+    const el = document.getElementById(id);
+    el.textContent = code;
+    el.className = 'status-pill ' + (code >= 200 && code < 300 ? 'ok' : 'error');
+  }
+
+  function setBody(id, text) {
+    document.getElementById(id).textContent = text;
+  }
+
+  function copyResponse(id) {
+    navigator.clipboard.writeText(document.getElementById(id).textContent);
+  }
+
+  function parseJsonField(id) {
+    const val = document.getElementById(id).value.trim();
+    if (!val) return [];
+    return JSON.parse(val);
+  }
+
+  async function post(path, body, statusId, bodyId) {
+    setStatus(statusId, '...');
+    setBody(bodyId, 'Loading…');
+    try {
+      const r = await fetch(BASE + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      setStatus(statusId, r.status);
+      const text = await r.text();
+      try {
+        setBody(bodyId, JSON.stringify(JSON.parse(text), null, 2));
+      } catch {
+        setBody(bodyId, text);
+      }
+    } catch (err) {
+      setStatus(statusId, 'ERR');
+      setBody(bodyId, err.message);
+    }
+  }
+
+  // ── Endpoint handlers ────────────────────────────────────────────────────
+  function sendIntent() {
+    const description = document.getElementById('intent-desc').value.trim();
+    if (!description) { alert('Enter a description.'); return; }
+    post('/api/intent', { description }, 'intent-status', 'intent-body');
+  }
+
+  function sendNodeDrop() {
+    const nodeType = document.getElementById('nd-type').value;
+    post('/api/copilot/node-drop', { nodeType }, 'nd-status', 'nd-body');
+  }
+
+  function sendEdgeDraw() {
+    const sourceType = document.getElementById('ed-source').value;
+    const targetType = document.getElementById('ed-target').value;
+    post('/api/copilot/edge-draw', { sourceType, targetType }, 'ed-status', 'ed-body');
+  }
+
+  function sendScan() {
+    let nodes, edges;
+    try { nodes = parseJsonField('scan-nodes'); edges = parseJsonField('scan-edges'); }
+    catch (e) { alert('Invalid JSON: ' + e.message); return; }
+    post('/api/copilot/scan', { nodes, edges }, 'scan-status', 'scan-body');
+  }
+
+  // ── SSE Run ───────────────────────────────────────────────────────────────
+  let runController = null;
+
+  async function sendRun() {
+    let nodes, edges;
+    try { nodes = parseJsonField('run-nodes'); edges = parseJsonField('run-edges'); }
+    catch (e) { alert('Invalid JSON: ' + e.message); return; }
+
+    const input = document.getElementById('run-input').value;
+    const eventsEl = document.getElementById('stream-events');
+    const statusEl = document.getElementById('run-status');
+
+    eventsEl.innerHTML = '';
+    statusEl.textContent = 'Running…';
+    statusEl.className = 'status-pill pending';
+
+    document.getElementById('run-btn').disabled = true;
+    document.getElementById('stop-btn').style.display = 'inline-flex';
+
+    runController = new AbortController();
+
+    function addEvent(ev) {
+      const div = document.createElement('div');
+      div.className = 'stream-event';
+
+      let badgeClass = 'ev-' + (ev.status || 'running');
+      let badgeText  = ev.status || 'running';
+      let main = ev.nodeId ? `Node: <strong>${ev.nodeId}</strong>` : '';
+      let sub  = '';
+
+      if (ev.output)      sub = `<div class="ev-output">${escapeHtml(ev.output.slice(0, 300))}${ev.output.length > 300 ? '…' : ''}</div>`;
+      if (ev.error)       sub = `<div class="ev-output" style="color:var(--red)">${escapeHtml(ev.error)}</div>`;
+      if (ev.finalOutput) sub = `<div class="ev-output"><strong>Final:</strong> ${escapeHtml(ev.finalOutput.slice(0, 400))}${ev.finalOutput.length > 400 ? '…' : ''}</div>`;
+
+      div.innerHTML = `<span class="ev-badge ${badgeClass}">${badgeText}</span><div class="ev-text">${main}${sub}</div>`;
+      eventsEl.appendChild(div);
+      div.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    try {
+      const resp = await fetch(BASE + '/api/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodes, edges, input }),
+        signal: runController.signal,
+      });
+
+      const reader  = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let   buf     = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop();
+        for (const part of parts) {
+          if (part.startsWith('data: ')) {
+            try {
+              const ev = JSON.parse(part.slice(6));
+              addEvent(ev);
+              if (ev.status === 'complete') {
+                statusEl.textContent = 'Complete';
+                statusEl.className = 'status-pill ok';
+              }
+              if (ev.status === 'fatal' || ev.status === 'error') {
+                statusEl.textContent = 'Error';
+                statusEl.className = 'status-pill error';
+              }
+            } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        statusEl.textContent = 'Failed';
+        statusEl.className = 'status-pill error';
+        addEvent({ status: 'fatal', error: err.message });
+      } else {
+        statusEl.textContent = 'Stopped';
+        statusEl.className = 'status-pill pending';
+      }
+    } finally {
+      document.getElementById('run-btn').disabled = false;
+      document.getElementById('stop-btn').style.display = 'none';
+      runController = null;
+    }
+  }
+
+  function stopRun() {
+    if (runController) runController.abort();
+  }
+
+  function sendShip() {
+    let nodes, edges;
+    try { nodes = parseJsonField('ship-nodes'); edges = parseJsonField('ship-edges'); }
+    catch (e) { alert('Invalid JSON: ' + e.message); return; }
+    post('/api/ship', { nodes, edges }, 'ship-status', 'ship-body');
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+  }
+</script>
+</body>
+</html>
