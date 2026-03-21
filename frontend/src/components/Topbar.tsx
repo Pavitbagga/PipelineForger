@@ -18,12 +18,27 @@ export const Topbar = ({ onShipIt, onTestRun }: TopbarProps) => {
     setIsGenerating(true);
     try {
       const result: any = await apiClient.generatePipeline(intent);
-      setNodes(result.nodes);
+      const transformedNodes = result.nodes.map((node: any) => ({
+        ...node,
+        data: {
+          label: node.config?.label || node.type || 'Node',
+          ...node.config,
+          status: 'idle',
+        }
+      }));
+      setNodes(transformedNodes);
       setEdges(result.edges);
-      addCopilotMessage({
-        role: 'claude',
-        text: result.copilotMessage,
-      });
+      if (result.copilotMessage) {
+        addCopilotMessage({
+          role: 'claude',
+          text: result.copilotMessage,
+        });
+      } else {
+        addCopilotMessage({
+          role: 'claude',
+          text: 'Pipeline generated! Click any node to configure it.',
+        });
+      }
     } catch (error) {
       addCopilotMessage({
         role: 'system',

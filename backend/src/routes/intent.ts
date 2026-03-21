@@ -31,15 +31,16 @@ Space nodes 250px apart horizontally. Start at x:100, y:300.
 Always include at least one input node and one output node.`;
 
 router.post('/', async (req: Request, res: Response) => {
-  const { description } = req.body;
+  const { description, intent } = req.body;
+  const query = description || intent;
 
-  if (!description || typeof description !== 'string') {
-    res.status(400).json({ error: 'description is required' });
+  if (!query || typeof query !== 'string') {
+    res.status(400).json({ error: 'description or intent is required' });
     return;
   }
 
   try {
-    const raw = await askClaude(SYSTEM_PROMPT, `Build a pipeline for: ${description}`);
+    const raw = await askClaude(SYSTEM_PROMPT, `Build a pipeline for: ${query}`);
     const parsed = JSON.parse(raw);
     res.json(parsed);
   } catch (err: any) {

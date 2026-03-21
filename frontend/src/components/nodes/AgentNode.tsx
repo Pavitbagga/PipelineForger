@@ -52,7 +52,7 @@ const AgentNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label}
+        {data.label || data.config?.label || "Agent"}
       </div>
 
       {/* Max Steps */}

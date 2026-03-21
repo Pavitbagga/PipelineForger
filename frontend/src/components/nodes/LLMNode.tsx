@@ -58,7 +58,7 @@ const LLMNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label}
+        {data.label || data.config?.label || "LLM"}
       </div>
 
       {/* Model Name */}

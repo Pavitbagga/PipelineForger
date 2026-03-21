@@ -66,7 +66,7 @@ const ToolNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label}
+        {data.label || data.config?.label || "Tool"}
       </div>
 
       {/* Tool Type */}

@@ -9,7 +9,7 @@ const COMPATIBILITY: Record<string, string[]> = {
   agent:  ["output", "router", "llm"],
   router: ["llm", "agent", "tool", "output"],
   output: [],
-}
+};
 
 router.post("/", (req, res) => {
   const { sourceType, targetType } = req.body;
@@ -19,7 +19,7 @@ router.post("/", (req, res) => {
     compatible,
     message: compatible
       ? sourceType + " -> " + targetType + " connection looks good."
-      : "Warning: " + sourceType + " cant connect directly to " + targetType + " nodes."
+      : "Warning: " + sourceType + " cannot connect directly to " + targetType + " nodes."
   });
 });
 

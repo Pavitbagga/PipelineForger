@@ -296,8 +296,11 @@
 
     <div class="nav-group">
       <div class="nav-group-label">Core</div>
-      <div class="nav-item active" data-panel="intent">
-        <span class="method-badge">POST</span> /api/intent
+      <div class="nav-item active" data-panel="generate-pipeline">
+        <span class="method-badge">POST</span> /api/generate-pipeline
+      </div>
+      <div class="nav-item" data-panel="validate-connection">
+        <span class="method-badge">POST</span> /api/validate-connection
       </div>
     </div>
 
@@ -316,15 +319,15 @@
 
     <div class="nav-group">
       <div class="nav-group-label">Execution</div>
-      <div class="nav-item" data-panel="run">
-        <span class="method-badge sse">SSE</span> /api/run
+      <div class="nav-item" data-panel="test-run">
+        <span class="method-badge sse">SSE</span> /api/test-run
       </div>
     </div>
 
     <div class="nav-group">
       <div class="nav-group-label">Export</div>
-      <div class="nav-item" data-panel="ship">
-        <span class="method-badge">POST</span> /api/ship
+      <div class="nav-item" data-panel="generate-code">
+        <span class="method-badge">POST</span> /api/generate-code
       </div>
     </div>
 
@@ -338,30 +341,73 @@
   <!-- ── Main ── -->
   <main class="main">
 
-    <!-- /api/intent -->
-    <div class="panel active" id="panel-intent">
+    <!-- /api/generate-pipeline -->
+    <div class="panel active" id="panel-generate-pipeline">
       <div class="panel-header">
-        <h2>Generate Pipeline from Description</h2>
-        <div class="route"><span class="badge">POST</span>/api/intent</div>
-        <p>Describe what you want your AI pipeline to do. Claude will return a structured node/edge graph.</p>
+        <h2>Generate Pipeline from Intent</h2>
+        <div class="route"><span class="badge">POST</span>/api/generate-pipeline</div>
+        <p>Describe what you want your AI pipeline to do in plain English. Claude will return a structured node/edge graph that you can visualize and execute.</p>
       </div>
       <div class="form-section">
         <h3>Request Body</h3>
-        <label>description</label>
-        <textarea id="intent-desc" rows="3" placeholder="e.g. Summarize a webpage then translate it to French"></textarea>
+        <label>intent (string - describe your workflow)</label>
+        <textarea id="gen-intent" rows="3" placeholder="e.g. Build a chatbot that answers questions using web search"></textarea>
         <div class="send-row">
-          <button class="btn btn-primary" onclick="sendIntent()">&#9654; Send Request</button>
+          <button class="btn btn-primary" onclick="sendGeneratePipeline()">&#9654; Generate Pipeline</button>
         </div>
       </div>
       <div class="response-box">
         <div class="response-header">
           Response
           <div style="display:flex;gap:8px;align-items:center">
-            <span id="intent-status" class="status-pill pending">—</span>
-            <button class="copy-btn" onclick="copyResponse('intent-body')">Copy</button>
+            <span id="gen-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('gen-body')">Copy</button>
           </div>
         </div>
-        <div class="response-body" id="intent-body">// response will appear here</div>
+        <div class="response-body" id="gen-body">// response will appear here</div>
+      </div>
+    </div>
+
+    <!-- /api/validate-connection -->
+    <div class="panel" id="panel-validate-connection">
+      <div class="panel-header">
+        <h2>Validate Edge Connection</h2>
+        <div class="route"><span class="badge">POST</span>/api/validate-connection</div>
+        <p>Check if connecting two node types is valid. Returns compatibility status and an explanation message.</p>
+      </div>
+      <div class="form-section">
+        <h3>Request Body</h3>
+        <label>sourceType</label>
+        <select id="val-source">
+          <option value="input">input</option>
+          <option value="llm">llm</option>
+          <option value="tool">tool</option>
+          <option value="agent">agent</option>
+          <option value="router">router</option>
+          <option value="output">output</option>
+        </select>
+        <label>targetType</label>
+        <select id="val-target">
+          <option value="llm">llm</option>
+          <option value="input">input</option>
+          <option value="tool">tool</option>
+          <option value="agent">agent</option>
+          <option value="router">router</option>
+          <option value="output">output</option>
+        </select>
+        <div class="send-row">
+          <button class="btn btn-primary" onclick="sendValidateConnection()">&#9654; Validate Connection</button>
+        </div>
+      </div>
+      <div class="response-box">
+        <div class="response-header">
+          Response
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="val-status" class="status-pill pending">—</span>
+            <button class="copy-btn" onclick="copyResponse('val-body')">Copy</button>
+          </div>
+        </div>
+        <div class="response-body" id="val-body">// response will appear here</div>
       </div>
     </div>
 
@@ -471,17 +517,17 @@
       </div>
     </div>
 
-    <!-- /api/run (SSE) -->
-    <div class="panel" id="panel-run">
+    <!-- /api/test-run (SSE) -->
+    <div class="panel" id="panel-test-run">
       <div class="panel-header">
-        <h2>Run Pipeline (Live Stream)</h2>
-        <div class="route"><span class="badge sse">SSE</span>/api/run</div>
-        <p>Executes the pipeline node-by-node. Events stream in real time — each node lights up as it runs.</p>
+        <h2>Test Run Pipeline (Live Stream)</h2>
+        <div class="route"><span class="badge sse">SSE</span>/api/test-run</div>
+        <p>Executes the pipeline node-by-node with streaming updates. Each node's status and output is streamed in real-time as SSE events.</p>
       </div>
       <div class="form-section">
         <h3>Request Body</h3>
         <label>input (string passed to the first node)</label>
-        <input type="text" id="run-input" placeholder="Hello! Summarize the latest AI news." />
+        <input type="text" id="run-input" placeholder="Hello! Tell me about AI pipelines." />
         <label>nodes (JSON array)</label>
         <textarea id="run-nodes" rows="8" placeholder='[{"id":"node_1","type":"input","position":{"x":100,"y":300},"config":{},"inputs":[],"outputs":["text"]},{"id":"node_2","type":"llm","position":{"x":350,"y":300},"config":{"systemPrompt":"You are a helpful assistant.","temperature":0.7},"inputs":["text"],"outputs":["text"]},{"id":"node_3","type":"output","position":{"x":600,"y":300},"config":{},"inputs":["text"],"outputs":[]}]'></textarea>
         <label>edges (JSON array)</label>
@@ -502,12 +548,12 @@
       </div>
     </div>
 
-    <!-- /api/ship -->
-    <div class="panel" id="panel-ship">
+    <!-- /api/generate-code -->
+    <div class="panel" id="panel-generate-code">
       <div class="panel-header">
-        <h2>Export Pipeline as Python</h2>
-        <div class="route"><span class="badge">POST</span>/api/ship</div>
-        <p>Generates clean, runnable Python code from the pipeline. Lists required environment variables.</p>
+        <h2>Generate Python Code</h2>
+        <div class="route"><span class="badge">POST</span>/api/generate-code</div>
+        <p>Transforms your pipeline into clean, executable Python code. Returns the code string and a list of required API keys/environment variables.</p>
       </div>
       <div class="form-section">
         <h3>Request Body</h3>
@@ -516,7 +562,7 @@
         <label>edges (JSON array)</label>
         <textarea id="ship-edges" rows="3" placeholder='[{"id":"e1","source":"node_1","target":"node_2"},{"id":"e2","source":"node_2","target":"node_3"}]'></textarea>
         <div class="send-row">
-          <button class="btn btn-primary" onclick="sendShip()">&#9654; Generate Code</button>
+          <button class="btn btn-primary" onclick="sendGenerateCode()">&#9654; Generate Code</button>
         </div>
       </div>
       <div class="response-box">
@@ -547,7 +593,7 @@
     });
   });
 
-  // ── Health check ─────────────────────────────────────────────────────────
+  // ── Health check ───────────────���─────────────────────────────────────────
   async function checkHealth() {
     const dot   = document.getElementById('health-dot');
     const label = document.getElementById('health-label');
@@ -604,10 +650,17 @@
   }
 
   // ── Endpoint handlers ────────────────────────────────────────────────────
-  function sendIntent() {
-    const description = document.getElementById('intent-desc').value.trim();
-    if (!description) { alert('Enter a description.'); return; }
-    post('/api/intent', { description }, 'intent-status', 'intent-body');
+  function sendGeneratePipeline() {
+    const intent = document.getElementById('gen-intent').value.trim();
+    if (!intent) { alert('Enter an intent/description.'); return; }
+    // Accept both "intent" and "description" field names
+    post('/api/generate-pipeline', { intent }, 'gen-status', 'gen-body');
+  }
+
+  function sendValidateConnection() {
+    const sourceType = document.getElementById('val-source').value;
+    const targetType = document.getElementById('val-target').value;
+    post('/api/validate-connection', { sourceType, targetType }, 'val-status', 'val-body');
   }
 
   function sendNodeDrop() {
@@ -668,7 +721,7 @@
     }
 
     try {
-      const resp = await fetch(BASE + '/api/run', {
+      const resp = await fetch(BASE + '/api/test-run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes, edges, input }),
@@ -722,11 +775,11 @@
     if (runController) runController.abort();
   }
 
-  function sendShip() {
+  function sendGenerateCode() {
     let nodes, edges;
     try { nodes = parseJsonField('ship-nodes'); edges = parseJsonField('ship-edges'); }
     catch (e) { alert('Invalid JSON: ' + e.message); return; }
-    post('/api/ship', { nodes, edges }, 'ship-status', 'ship-body');
+    post('/api/generate-code', { nodes, edges }, 'ship-status', 'ship-body');
   }
 
   function escapeHtml(str) {

@@ -52,7 +52,7 @@ const OutputNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '8px',
         }}
       >
-        {data.label}
+        {data.label || data.config?.label || "Output"}
       </div>
 
       {/* Status Indicator */}

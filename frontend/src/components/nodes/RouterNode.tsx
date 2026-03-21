@@ -52,7 +52,7 @@ const RouterNode = ({ data, selected }: NodeProps<NodeData>) => {
           marginBottom: '4px',
         }}
       >
-        {data.label}
+        {data.label || data.config?.label || "Router"}
       </div>
 
       {/* Condition Preview */}
