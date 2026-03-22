@@ -39,6 +39,7 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
   const {
     nodes: storeNodes,
     edges: storeEdges,
+    setNodes: setStoreNodes,
     setEdges: setStoreEdges,
     addNode,
     setSelectedNodeId,

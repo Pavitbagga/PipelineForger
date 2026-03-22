@@ -40,7 +40,7 @@ export const Sidebar = () => {
         role: 'claude',
         text: result.copilotMessage,
       });
-    } catch (error) {
+    } catch {
       addCopilotMessage({
         role: 'system',
         text: 'Failed to load template. Please try again.',

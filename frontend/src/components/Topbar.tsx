@@ -42,7 +42,7 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: To
           text: 'Pipeline generated! Click any node to configure it.',
         });
       }
-    } catch (error) {
+    } catch {
       addCopilotMessage({
         role: 'system',
         text: 'Failed to generate pipeline. Please try again.',

@@ -42,8 +42,6 @@ export const DrawingCanvasModal = ({ onClose }: { onClose: () => void }) => {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
     saveSnapshot(ctx);
-  // saveSnapshot is stable (doesn't capture reactive values) — safe to omit
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getCanvasPos = (e: React.MouseEvent<HTMLCanvasElement>) => {

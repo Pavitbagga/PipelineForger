@@ -19,6 +19,8 @@ export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
     if (isOpen && nodes.length > 0) {
       generateCode();
     }
+    // generateCode is intentionally omitted: including it would re-trigger on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, nodes]);
 
   const generateCode = async () => {

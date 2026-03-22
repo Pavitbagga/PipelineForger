@@ -45,6 +45,7 @@ function validateInput(input: string): string | null {
 
 function sanitizeInput(input: string): string {
   // Strip control characters (keep newlines \u000A and tabs \u0009)
+  // eslint-disable-next-line no-control-regex
   return input.replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, '').trim();
 }
 

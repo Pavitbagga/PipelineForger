@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePipelineStore } from '../store/pipelineStore';
 import type { NodeData } from '../store/pipelineStore';
 
@@ -7,15 +7,14 @@ export const ConfigPanel = () => {
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
 
-  // Local form state
+  // Local form state — reset synchronously during render when selection changes
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(selectedNodeId);
   const [formData, setFormData] = useState<NodeData>(selectedNode?.data || { label: '' });
 
-  // Update form when selected node changes
-  useEffect(() => {
-    if (selectedNode) {
-      setFormData(selectedNode.data);
-    }
-  }, [selectedNode]);
+  if (lastSelectedId !== selectedNodeId) {
+    setLastSelectedId(selectedNodeId);
+    setFormData(selectedNode?.data || { label: '' });
+  }
 
   if (!selectedNode) return null;
 
