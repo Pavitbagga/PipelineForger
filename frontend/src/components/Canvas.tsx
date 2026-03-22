@@ -66,11 +66,11 @@ export const Canvas = () => {
       onNodesChange(changes);
       // After React Flow processes the changes, sync back to store
       setNodes((currentNodes) => {
-        setStoreNodes(currentNodes);
+        setNodes(currentNodes);
         return currentNodes;
       });
     },
-    [onNodesChange, setNodes, setStoreNodes]
+    [onNodesChange, setNodes, setNodes]
   );
 
   // Wrap onEdgesChange to sync back TO store (BUG FIX #2)
@@ -175,7 +175,7 @@ export const Canvas = () => {
       // Update both React Flow state and Zustand store
       setNodes((nds) => {
         const updatedNodes = [...nds, newNode];
-        setStoreNodes(updatedNodes);
+        setNodes(updatedNodes);
         return updatedNodes;
       });
       addNode(newNode);
@@ -185,7 +185,7 @@ export const Canvas = () => {
         text: `${type.toUpperCase()} node added. Click it to configure.`,
       });
     },
-    [screenToFlowPosition, setNodes, setStoreNodes, addNode, addCopilotMessage]
+    [screenToFlowPosition, setNodes, setNodes, addNode, addCopilotMessage]
   );
 
   const onNodeClick = useCallback(
