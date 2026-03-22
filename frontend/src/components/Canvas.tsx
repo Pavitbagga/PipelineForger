@@ -198,6 +198,7 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
 
   return (
     <div
+      data-tour="canvas-area"
       ref={reactFlowWrapper}
       style={{ flex: 1, background: 'var(--bg-canvas)', position: 'relative' }}
     >
