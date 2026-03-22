@@ -486,8 +486,8 @@ export const ConfigPanel = () => {
           style={{
             flex: 1,
             height: '40px',
-            background: 'transparent',
-            border: '1px solid var(--border)',
+            background: 'var(--btn-ghost-bg)',
+            border: '1px solid var(--btn-ghost-border)',
             borderRadius: '6px',
             color: 'var(--text-primary)',
             fontSize: '14px',

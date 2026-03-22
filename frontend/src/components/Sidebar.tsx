@@ -143,15 +143,15 @@ export const Sidebar = () => {
               key={template.name}
               onClick={() => handleTemplateClick(template.name)}
               style={{
-                background: 'transparent',
-                border: '1px solid var(--border)',
+                background: 'var(--btn-ghost-bg)',
+                border: '1px solid var(--btn-ghost-border)',
                 borderRadius: '6px',
                 padding: '10px 12px',
                 color: 'var(--text-primary)',
                 fontSize: '13px',
                 cursor: 'pointer',
                 textAlign: 'left',
-                transition: 'all 0.2s',
+                transition: 'border-color 0.2s, background 0.2s',
                 fontFamily: 'JetBrains Mono, monospace',
               }}
               onMouseEnter={(e) => {
@@ -159,8 +159,8 @@ export const Sidebar = () => {
                 e.currentTarget.style.borderColor = 'var(--accent)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = 'var(--border)';
+                e.currentTarget.style.background = 'var(--btn-ghost-bg)';
+                e.currentTarget.style.borderColor = 'var(--btn-ghost-border)';
               }}
             >
               {template.label}

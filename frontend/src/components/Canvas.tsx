@@ -35,7 +35,7 @@ const nodeTypes = {
   output: OutputNode,
 };
 
-export const Canvas = () => {
+export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
   const {
     nodes: storeNodes,
     edges: storeEdges,
@@ -215,11 +215,21 @@ export const Canvas = () => {
           background: 'var(--bg-canvas)',
         }}
       >
+        {/* Fine cross grid — structural layer */}
         <Background
+          id="grid"
+          variant={BackgroundVariant.Cross}
+          gap={40}
+          size={14}
+          color={theme === 'light' ? 'rgba(79, 70, 229, 0.10)' : 'rgba(255, 255, 255, 0.04)'}
+        />
+        {/* Large accent dots — on every other grid intersection */}
+        <Background
+          id="dots"
           variant={BackgroundVariant.Dots}
-          gap={20}
-          size={1}
-          color="rgba(255, 255, 255, 0.1)"
+          gap={80}
+          size={4}
+          color={theme === 'light' ? 'rgba(79, 70, 229, 0.35)' : 'rgba(99, 102, 241, 0.45)'}
         />
         <Controls
           style={{

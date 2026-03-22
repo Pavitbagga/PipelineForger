@@ -6,9 +6,11 @@ type TopbarProps = {
   onShipIt: () => void;
   onTestRun: () => void;
   onDraw: () => void;
+  onToggleTheme: () => void;
+  theme: 'dark' | 'light';
 };
 
-export const Topbar = ({ onShipIt, onTestRun, onDraw }: TopbarProps) => {
+export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: TopbarProps) => {
   const [intent, setIntent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const { nodes, setNodes, setEdges, addCopilotMessage } = usePipelineStore();
@@ -137,16 +139,44 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw }: TopbarProps) => {
       </div>
 
       {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <button
+          onClick={onToggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          style={{
+            height: '36px',
+            width: '36px',
+            background: 'var(--btn-ghost-bg)',
+            border: '1px solid var(--btn-ghost-border)',
+            borderRadius: '8px',
+            color: 'var(--btn-ghost-color)',
+            fontSize: '16px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'border-color 0.2s, background 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'var(--btn-ghost-bg)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--btn-ghost-border)';
+            (e.currentTarget as HTMLButtonElement).style.background = 'var(--btn-ghost-bg)';
+          }}
+        >
+          {theme === 'dark' ? '☀️' : '🌙'}
+        </button>
         <button
           onClick={onDraw}
           style={{
             height: '40px',
             padding: '0 20px',
-            background: 'transparent',
-            border: '1px solid var(--border)',
+            background: 'var(--btn-ghost-bg)',
+            border: '1px solid var(--btn-ghost-border)',
             borderRadius: '8px',
-            color: 'var(--text-muted)',
+            color: 'var(--btn-ghost-color)',
             fontSize: '14px',
             fontWeight: 500,
             cursor: 'pointer',
@@ -161,8 +191,8 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw }: TopbarProps) => {
             (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
-            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--btn-ghost-border)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--btn-ghost-color)';
           }}
         >
           <span>✏️</span>
@@ -175,17 +205,24 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw }: TopbarProps) => {
             height: '40px',
             padding: '0 20px',
             background: 'transparent',
-            border: '1px solid var(--accent)',
+            border: '2px solid var(--accent)',
             borderRadius: '8px',
             color: 'var(--accent)',
             fontSize: '14px',
-            fontWeight: 500,
+            fontWeight: 600,
             cursor: nodes.length === 0 ? 'not-allowed' : 'pointer',
-            opacity: nodes.length === 0 ? 0.5 : 1,
+            opacity: nodes.length === 0 ? 0.4 : 1,
             fontFamily: 'JetBrains Mono, monospace',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            if (nodes.length > 0) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.1)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
           }}
         >
           <span>▶</span>
@@ -197,18 +234,25 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw }: TopbarProps) => {
           style={{
             height: '40px',
             padding: '0 20px',
-            background: nodes.length === 0 ? 'var(--bg-card)' : 'var(--accent)',
-            border: 'none',
+            background: 'var(--accent)',
+            border: '2px solid var(--accent)',
             borderRadius: '8px',
-            color: 'white',
+            color: '#ffffff',
             fontSize: '14px',
-            fontWeight: 500,
+            fontWeight: 600,
             cursor: nodes.length === 0 ? 'not-allowed' : 'pointer',
-            opacity: nodes.length === 0 ? 0.5 : 1,
+            opacity: nodes.length === 0 ? 0.4 : 1,
             fontFamily: 'JetBrains Mono, monospace',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            transition: 'opacity 0.2s, filter 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            if (nodes.length > 0) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.15)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.filter = 'none';
           }}
         >
           <span>🚀</span>
