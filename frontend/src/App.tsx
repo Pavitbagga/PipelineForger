@@ -9,6 +9,8 @@ import { ConfigPanel } from './components/ConfigPanel';
 import { ShipItModal } from './components/ShipItModal';
 import { TestRunOverlay } from './components/TestRunOverlay';
 import { DrawingCanvasModal } from './components/DrawingCanvasModal';
+import { TutorialModal } from './components/TutorialModal';
+import { OnboardingTour, resetTour } from './components/OnboardingTour';
 import { usePipelineStore } from './store/pipelineStore';
 
 function App() {
@@ -16,6 +18,17 @@ function App() {
   const [isShipItModalOpen, setIsShipItModalOpen] = useState(false);
   const [isTestRunActive, setIsTestRunActive] = useState(false);
   const [isDrawingOpen, setIsDrawingOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(
+    () => localStorage.getItem('forge_tutorial_seen') !== 'true'
+  );
+  const [showTour, setShowTour] = useState(
+    () => localStorage.getItem('forge_onboarded') !== 'true'
+  );
+
+  const handleResetTour = () => {
+    resetTour();
+    setShowTour(true);
+  };
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark';
   });
@@ -45,7 +58,7 @@ function App() {
         overflow: 'hidden',
       }}
     >
-      <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} onDraw={() => setIsDrawingOpen(true)} onToggleTheme={toggleTheme} theme={theme} />
+      <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} onDraw={() => setIsDrawingOpen(true)} onToggleTheme={toggleTheme} theme={theme} onResetTour={handleResetTour} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar />
         <ReactFlowProvider>
@@ -66,6 +79,26 @@ function App() {
 
       {/* Drawing Canvas Modal */}
       {isDrawingOpen && <DrawingCanvasModal onClose={() => setIsDrawingOpen(false)} />}
+
+      {/* Tutorial Modal — shown on first visit */}
+      {isTutorialOpen && !showTour && (
+        <TutorialModal
+          onClose={() => {
+            localStorage.setItem('forge_tutorial_seen', 'true');
+            setIsTutorialOpen(false);
+          }}
+        />
+      )}
+
+      {/* Onboarding Tour — spotlight walkthrough on first load */}
+      {showTour && (
+        <OnboardingTour onComplete={() => {
+          setShowTour(false);
+          // Mark tutorial as seen too so it doesn't appear after the tour
+          localStorage.setItem('forge_tutorial_seen', 'true');
+          setIsTutorialOpen(false);
+        }} />
+      )}
     </div>
   );
 }

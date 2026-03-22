@@ -62,7 +62,7 @@ export const Sidebar = () => {
       }}
     >
       {/* Node Types */}
-      <div>
+      <div data-tour="node-sidebar">
         <div
           style={{
             fontSize: '11px',
@@ -124,7 +124,7 @@ export const Sidebar = () => {
       <div style={{ height: '1px', background: 'var(--border)' }} />
 
       {/* Templates */}
-      <div>
+      <div data-tour="templates-sidebar">
         <div
           style={{
             fontSize: '11px',

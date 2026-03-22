@@ -38,6 +38,7 @@ export const CopilotPanel = () => {
 
   return (
     <div
+      data-tour="copilot-panel"
       style={{
         width: '280px',
         background: 'var(--bg-panel)',

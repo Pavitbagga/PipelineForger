@@ -8,9 +8,10 @@ type TopbarProps = {
   onDraw: () => void;
   onToggleTheme: () => void;
   theme: 'dark' | 'light';
+  onResetTour?: () => void;
 };
 
-export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: TopbarProps) => {
+export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onResetTour }: TopbarProps) => {
   const [intent, setIntent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const { nodes, setNodes, setEdges, addCopilotMessage } = usePipelineStore();
@@ -90,6 +91,7 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: To
       {/* Intent Input */}
       <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
         <input
+          data-tour="intent-box"
           type="text"
           placeholder="Describe what you want to build..."
           value={intent}
@@ -117,6 +119,7 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: To
           }}
         />
         <button
+          data-tour="generate-btn"
           onClick={handleGenerate}
           disabled={isGenerating || !intent.trim()}
           style={{
@@ -140,6 +143,27 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: To
 
       {/* Action Buttons */}
       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        {onResetTour && (
+          <button
+            onClick={onResetTour}
+            title="Restart the onboarding tour"
+            style={{
+              height: '36px',
+              padding: '0 12px',
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontFamily: 'JetBrains Mono, monospace',
+              transition: 'color 0.2s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            ? Tour
+          </button>
+        )}
         <button
           onClick={onToggleTheme}
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -199,6 +223,7 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: To
           <span>Draw</span>
         </button>
         <button
+          data-tour="test-run-btn"
           onClick={onTestRun}
           disabled={nodes.length === 0}
           style={{
@@ -229,6 +254,7 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme }: To
           <span>Test Run</span>
         </button>
         <button
+          data-tour="ship-it-btn"
           onClick={onShipIt}
           disabled={nodes.length === 0}
           style={{
