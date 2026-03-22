@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { usePipelineStore } from '../store/pipelineStore';
 import { apiClient } from '../lib/apiClient';
+import { fetchWithAuth } from '../lib/api';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 type TopbarProps = {
   onShipIt: () => void;
@@ -14,24 +17,111 @@ type TopbarProps = {
   onSignOut: () => void;
   onOpenPipelines: () => void;
   onPipelineSaved?: () => void;
+  onOpenHistory: () => void;
 };
 
-export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onResetTour, session, onSignOut, onOpenPipelines, onPipelineSaved }: TopbarProps) => {
+type SaveStatus = 'idle' | 'saved' | 'updated' | 'error';
+
+export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onResetTour, session, onSignOut, onOpenPipelines, onPipelineSaved, onOpenHistory }: TopbarProps) => {
   const [intent, setIntent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const { nodes, setNodes, setEdges, addCopilotMessage, savePipeline } = usePipelineStore();
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveModalName, setSaveModalName] = useState('');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
 
-  const handleSave = async () => {
-    const name = window.prompt('Pipeline name:', 'My Pipeline');
-    if (!name?.trim()) return;
+  const {
+    nodes, edges,
+    setNodes, setEdges,
+    addCopilotMessage,
+    currentPipelineId,
+    activePipelineId,
+    activePipelineName,
+    lastSavedSnapshot,
+    setActivePipeline,
+    updateLastSavedSnapshot,
+  } = usePipelineStore();
+
+  // Auto-dismiss save status after 3 s
+  useEffect(() => {
+    if (saveStatus === 'idle') return;
+    const t = setTimeout(() => setSaveStatus('idle'), 3000);
+    return () => clearTimeout(t);
+  }, [saveStatus]);
+
+  const openSaveModal = () => {
+    setSaveModalName(activePipelineName ?? '');
+    setShowSaveModal(true);
+  };
+
+  const handleSaveSubmit = async () => {
+    const name = saveModalName.trim() || 'My Pipeline';
+    setShowSaveModal(false);
     setIsSaving(true);
     try {
-      await savePipeline(name.trim());
+      if (activePipelineId) {
+        // ── UPDATE existing pipeline ──────────────────────────────────────────
+        const prevNodes = (lastSavedSnapshot?.nodes as Array<{ id: string }> | undefined) ?? [];
+        const prevEdges = (lastSavedSnapshot?.edges as Array<{ id: string }> | undefined) ?? [];
+        const currentNodeIds = nodes.map((n) => n.id);
+        const prevNodeIds = prevNodes.map((n) => n.id);
+        const currentEdgeIds = edges.map((e) => e.id);
+        const prevEdgeIds = prevEdges.map((e) => e.id);
+
+        const diffDescription = [
+          `Nodes added: ${currentNodeIds.filter((id) => !prevNodeIds.includes(id)).length}`,
+          `Nodes removed: ${prevNodeIds.filter((id) => !currentNodeIds.includes(id)).length}`,
+          `Edges added: ${currentEdgeIds.filter((id) => !prevEdgeIds.includes(id)).length}`,
+          `Edges removed: ${prevEdgeIds.filter((id) => !currentEdgeIds.includes(id)).length}`,
+          `Node types now present: ${[...new Set(nodes.map((n) => n.type))].join(', ')}`,
+        ].join(', ');
+
+        const [summarizeRes, updateRes] = await Promise.all([
+          fetchWithAuth(`${API_URL}/api/pipelines/summarize`, {
+            method: 'POST',
+            body: JSON.stringify({
+              pipelineName: name,
+              diffDescription,
+              previousNodeCount: prevNodeIds.length,
+              currentNodeCount: currentNodeIds.length,
+            }),
+          }),
+          fetchWithAuth(`${API_URL}/api/pipelines/${activePipelineId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, nodes, edges }),
+          }),
+        ]);
+
+        if (!updateRes.ok) throw new Error(`Update failed: HTTP ${updateRes.status}`);
+
+        const { summary } = summarizeRes.ok
+          ? (await summarizeRes.json() as { summary: string })
+          : { summary: 'Pipeline updated with structural changes.' };
+
+        await fetchWithAuth(`${API_URL}/api/history/${activePipelineId}`, {
+          method: 'POST',
+          body: JSON.stringify({ summary, nodes, edges }),
+        });
+
+        updateLastSavedSnapshot();
+        setSaveStatus('updated');
+      } else {
+        // ── CREATE new pipeline ───────────────────────────────────────────────
+        const res = await fetchWithAuth(`${API_URL}/api/pipelines`, {
+          method: 'POST',
+          body: JSON.stringify({ name, nodes, edges }),
+        });
+        if (!res.ok) throw new Error(`Save failed: HTTP ${res.status}`);
+        const saved = await res.json() as { id: string };
+        setActivePipeline(saved.id, name);
+        updateLastSavedSnapshot();
+        setSaveStatus('saved');
+      }
       onPipelineSaved?.();
-    } catch {
-      console.error('[Topbar] Save failed');
+    } catch (err) {
+      console.error('[Topbar] Save failed:', err);
+      setSaveStatus('error');
     } finally {
       setIsSaving(false);
     }
@@ -94,6 +184,196 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
   };
 
   return (
+    <>
+    {/* Save Modal */}
+    {showSaveModal && (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 300,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(4px)',
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget) setShowSaveModal(false); }}
+      >
+        <div
+          style={{
+            width: '400px',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border)',
+            borderRadius: '14px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Modal header */}
+          <div
+            style={{
+              padding: '20px 24px 18px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontFamily: 'Syne, sans-serif',
+                  fontSize: '17px',
+                  fontWeight: 700,
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span style={{ color: 'var(--accent)' }}>💾</span>
+                Save Pipeline
+              </div>
+              <div
+                style={{
+                  marginTop: '4px',
+                  fontSize: '12px',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  color: activePipelineId ? '#10b981' : 'var(--text-muted)',
+                }}
+              >
+                {activePipelineId ? `Updating: ${activePipelineName ?? 'existing pipeline'}` : 'Saving as new pipeline'}
+              </div>
+            </div>
+            <button
+              onClick={() => setShowSaveModal(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '22px',
+                cursor: 'pointer',
+                lineHeight: 1,
+                padding: '2px 6px',
+                borderRadius: '6px',
+                transition: 'color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--text-primary)';
+                e.currentTarget.style.background = 'var(--bg-card)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-muted)';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Modal body */}
+          <div style={{ padding: '20px 24px' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.6px',
+                color: 'var(--text-muted)',
+                marginBottom: '8px',
+                fontFamily: 'JetBrains Mono, monospace',
+              }}
+            >
+              Pipeline Name
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={saveModalName}
+              onChange={(e) => setSaveModalName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveSubmit(); if (e.key === 'Escape') setShowSaveModal(false); }}
+              placeholder="My Pipeline"
+              style={{
+                width: '100%',
+                height: '42px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '0 14px',
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                fontFamily: 'JetBrains Mono, monospace',
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                boxSizing: 'border-box',
+              }}
+              onFocus={(e) => { e.target.style.borderColor = 'var(--accent)'; }}
+              onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
+            />
+          </div>
+
+          {/* Modal footer */}
+          <div
+            style={{
+              padding: '0 24px 20px',
+              display: 'flex',
+              gap: '10px',
+              justifyContent: 'flex-end',
+            }}
+          >
+            <button
+              onClick={() => setShowSaveModal(false)}
+              style={{
+                height: '38px',
+                padding: '0 18px',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                color: 'var(--text-muted)',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'JetBrains Mono, monospace',
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border)';
+                e.currentTarget.style.color = 'var(--text-muted)';
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveSubmit}
+              style={{
+                height: '38px',
+                padding: '0 22px',
+                background: 'var(--accent)',
+                border: 'none',
+                borderRadius: '8px',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'JetBrains Mono, monospace',
+                transition: 'filter 0.15s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(1.15)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+            >
+              {activePipelineId ? 'Update Pipeline' : 'Save Pipeline'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div
       style={{
         height: '64px',
@@ -318,9 +598,62 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
           <span>My Pipelines</span>
         </button>
 
+        {/* Execution History button — always visible; disabled when no pipeline is active */}
+        <button
+          onClick={activePipelineId ? onOpenHistory : undefined}
+          title={activePipelineId ? 'View execution history' : 'Load a pipeline to view history'}
+          style={{
+            height: '40px',
+            padding: '0 14px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+            fontWeight: 500,
+            cursor: activePipelineId ? 'pointer' : 'default',
+            opacity: activePipelineId ? 1 : 0.5,
+            fontFamily: 'JetBrains Mono, monospace',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'border-color 0.2s, color 0.2s, opacity 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            if (activePipelineId) {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+          }}
+        >
+          <span>🕐</span>
+          <span>History</span>
+        </button>
+
+        {/* Save status badge */}
+        {saveStatus !== 'idle' && (
+          <span
+            style={{
+              fontSize: '12px',
+              fontFamily: 'JetBrains Mono, monospace',
+              color: saveStatus === 'error' ? '#f43f5e' : '#10b981',
+              opacity: 0.9,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {saveStatus === 'saved' && '✓ Saved'}
+            {saveStatus === 'updated' && '✓ Updated'}
+            {saveStatus === 'error' && '✗ Failed'}
+          </span>
+        )}
+
         {/* Save button */}
         <button
-          onClick={handleSave}
+          onClick={openSaveModal}
           disabled={nodes.length === 0 || isSaving}
           style={{
             height: '40px',
@@ -470,5 +803,6 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
         )}
       </div>
     </div>
+    </>
   );
 };

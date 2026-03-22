@@ -11,6 +11,7 @@ import { TestRunOverlay } from './components/TestRunOverlay';
 import { DrawingCanvasModal } from './components/DrawingCanvasModal';
 import { TutorialModal } from './components/TutorialModal';
 import { SavedPipelinesPanel } from './components/SavedPipelinesPanel';
+import { ExecutionHistoryPanel } from './components/ExecutionHistoryPanel';
 import { OnboardingTour, resetTour } from './components/OnboardingTour';
 import { LoginPage } from './components/LoginPage';
 import { supabase } from './lib/supabase';
@@ -30,7 +31,9 @@ function App() {
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [isPipelinesOpen, setIsPipelinesOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
   const [theme, setTheme] = useState<'dark' | 'light'>(
     () => (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark'
   );
@@ -165,6 +168,7 @@ function App() {
         onSignOut={handleSignOut}
         onOpenPipelines={() => setIsPipelinesOpen(true)}
         onPipelineSaved={() => setRefreshTrigger((n) => n + 1)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar />
@@ -182,11 +186,20 @@ function App() {
         />
       )}
 
+      {isHistoryOpen && (
+        <ExecutionHistoryPanel
+          onClose={() => setIsHistoryOpen(false)}
+          refreshTrigger={historyRefreshTrigger}
+          onOpenPipelines={() => { setIsHistoryOpen(false); setIsPipelinesOpen(true); }}
+        />
+      )}
+
       <ShipItModal isOpen={isShipItModalOpen} onClose={() => setIsShipItModalOpen(false)} />
 
       <TestRunOverlay
         isActive={isTestRunActive}
         onClose={() => setIsTestRunActive(false)}
+        onRunComplete={() => setHistoryRefreshTrigger((n) => n + 1)}
       />
 
       {isDrawingOpen && <DrawingCanvasModal onClose={() => setIsDrawingOpen(false)} />}

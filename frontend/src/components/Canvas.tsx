@@ -19,6 +19,8 @@ import '@xyflow/react/dist/style.css';
 import { usePipelineStore } from '../store/pipelineStore';
 import type { NodeData } from '../store/pipelineStore';
 import { apiClient } from '../lib/apiClient';
+// ADD THIS: shared default config utility
+import { getDefaultConfig } from '../lib/nodeDefaults';
 import InputNode from './nodes/InputNode';
 import LLMNode from './nodes/LLMNode';
 import ToolNode from './nodes/ToolNode';
@@ -153,23 +155,31 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
         data: {
           label: type.charAt(0).toUpperCase() + type.slice(1),
           status: 'idle',
+          // Flat fields for node renderers and ConfigPanel (frontend names)
+          ...(type === 'input' && {
+            inputType: 'text',
+            placeholder: 'Enter your input...',
+          }),
           ...(type === 'llm' && {
-            model: 'claude-sonnet',
-            systemPrompt: '',
+            model: 'claude-sonnet' as const,
+            systemPrompt: 'You are a helpful assistant. Complete the task provided.',
             temperature: 0.7,
           }),
           ...(type === 'tool' && {
-            toolType: 'search',
+            toolType: 'search' as const,
             parameters: {},
           }),
           ...(type === 'agent' && {
-            goal: '',
-            maxSteps: 5,
+            goal: 'Complete the task provided by the user.',
+            maxSteps: 3,
             availableTools: [],
           }),
           ...(type === 'router' && {
             condition: '',
           }),
+          // ADD THIS: nested backend-ready config — single source of truth for
+          // serialisation. Never undefined after creation.
+          config: getDefaultConfig(type),
         },
       };
 

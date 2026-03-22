@@ -385,6 +385,13 @@ function TooltipCard({ step, rect, spotNum, onNext, onBack, onSkip, isFirstSpot 
 type WelcomeModalProps = { onStart: () => void; onSkip: () => void };
 
 function WelcomeModal({ onStart, onSkip }: WelcomeModalProps) {
+  // ADD THIS: Escape key closes the welcome screen (same as Skip)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onSkip(); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onSkip]);
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9010,
@@ -457,12 +464,20 @@ type CompleteModalProps = {
 };
 
 function CompleteModal({ onLoadTemplate, onScratch }: CompleteModalProps) {
+  // ADD THIS: Escape key closes the completion screen (same as Start from Scratch)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onScratch(); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onScratch]);
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9010,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       pointerEvents: 'none',
     }}>
+      {/* ADD THIS: position relative so the × button is anchored to this panel */}
       <div style={{
         width: 560,
         background: 'var(--bg-panel)',
@@ -471,7 +486,37 @@ function CompleteModal({ onLoadTemplate, onScratch }: CompleteModalProps) {
         padding: '36px',
         boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
         pointerEvents: 'all',
+        position: 'relative',
       }}>
+        {/* ADD THIS: × close button — top right of the panel */}
+        <button
+          aria-label="Close"
+          onClick={onScratch}
+          style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            background: 'transparent',
+            border: 'none',
+            color: '#6b7280',
+            fontSize: 20,
+            lineHeight: 1,
+            cursor: 'pointer',
+            padding: '4px 8px',
+            borderRadius: 6,
+            transition: 'all 150ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+            e.currentTarget.style.color = '#fff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = '#6b7280';
+          }}
+        >
+          ×
+        </button>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 44, marginBottom: 12 }}>⚡</div>
           <h1 style={{ fontFamily: 'Syne, sans-serif', fontSize: 24, fontWeight: 700, margin: '0 0 8px', color: 'var(--text-primary)' }}>
