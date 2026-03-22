@@ -34,6 +34,9 @@ export type NodeData = {
   condition?: string;
   // Status for all nodes:
   status?: NodeStatus;
+  // ADD THIS: backend-ready config object, kept in sync by ConfigPanel on save
+  // and used by ShipItModal / TestRunOverlay when serialising for the engine.
+  config?: Record<string, unknown>;
 };
 
 export type CopilotMessage = {
@@ -51,6 +54,11 @@ type PipelineStore = {
   currentPipelineId: string | null;
   savedPipelines: SavedPipeline[];
 
+  // Active pipeline tracking (for update-vs-create save logic)
+  activePipelineId: string | null;
+  activePipelineName: string | null;
+  lastSavedSnapshot: { nodes: unknown[]; edges: unknown[] } | null;
+
   // Actions
   addNode: (node: Node<NodeData>) => void;
   updateNode: (id: string, data: Partial<NodeData>) => void;
@@ -65,6 +73,9 @@ type PipelineStore = {
   clearPipeline: () => void;
   savePipeline: (name: string) => Promise<void>;
   loadPipelines: () => Promise<SavedPipeline[]>;
+  setActivePipeline: (id: string | null, name: string | null) => void;
+  clearActivePipeline: () => void;
+  updateLastSavedSnapshot: () => void;
 };
 
 export const usePipelineStore = create<PipelineStore>((set, get) => ({
@@ -81,6 +92,9 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
   isGeneratingCode: false,
   currentPipelineId: null,
   savedPipelines: [],
+  activePipelineId: null,
+  activePipelineName: null,
+  lastSavedSnapshot: null,
 
   addNode: (node) =>
     set((state) => ({
@@ -128,7 +142,36 @@ export const usePipelineStore = create<PipelineStore>((set, get) => ({
       edges: [],
       selectedNodeId: null,
       currentPipelineId: null,
+      activePipelineId: null,
+      activePipelineName: null,
+      lastSavedSnapshot: null,
     }),
+
+  setActivePipeline: (id, name) =>
+    set((state) => ({
+      activePipelineId: id,
+      activePipelineName: name,
+      currentPipelineId: id,
+      lastSavedSnapshot: {
+        nodes: state.nodes as unknown[],
+        edges: state.edges as unknown[],
+      },
+    })),
+
+  clearActivePipeline: () =>
+    set({
+      activePipelineId: null,
+      activePipelineName: null,
+      lastSavedSnapshot: null,
+    }),
+
+  updateLastSavedSnapshot: () =>
+    set((state) => ({
+      lastSavedSnapshot: {
+        nodes: state.nodes as unknown[],
+        edges: state.edges as unknown[],
+      },
+    })),
 
   savePipeline: async (name: string) => {
     const { nodes, edges } = get();

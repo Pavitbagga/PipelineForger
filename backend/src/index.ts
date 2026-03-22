@@ -11,6 +11,8 @@ import shipRouter from './routes/ship';
 import validateRouter from './routes/validate';
 import sketchRouter from './routes/sketch';
 import pipelinesRouter from './routes/pipelines';
+import engineRouter, { validateHandler } from './routes/engine';
+import pipelineHistoryRouter, { summarizeHandler } from './routes/pipelineHistory';
 import { requireAuth } from './middleware/auth';
 
 const app = express();
@@ -26,7 +28,15 @@ app.use('/api/test-run',          requireAuth, runRouter);
 app.use('/api/generate-code',     requireAuth, shipRouter);
 app.use('/api/validate-connection', requireAuth, validateRouter);
 app.use('/api/interpret-sketch',  requireAuth, sketchRouter);
-app.use('/api/pipelines',         requireAuth, pipelinesRouter);
+// /api/pipelines/summarize registered before /:id routes to avoid param collision
+app.post('/api/pipelines/summarize', requireAuth, summarizeHandler);
+app.use('/api/pipelines',            requireAuth, pipelinesRouter);
+// Pipeline changelog history on a separate base path to avoid /:id conflicts
+app.use('/api/history',              requireAuth, pipelineHistoryRouter);
+
+// Engine routes — validate is public; all others require auth
+app.post('/api/engine/validate', validateHandler);
+app.use('/api/engine',           requireAuth, engineRouter);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 

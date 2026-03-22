@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { usePipelineStore } from '../store/pipelineStore';
 import type { NodeData } from '../store/pipelineStore';
+import { buildConfigFromData } from '../lib/nodeDefaults';
 
 export const ConfigPanel = () => {
   const { nodes, selectedNodeId, updateNode, setSelectedNodeId } = usePipelineStore();
@@ -20,7 +21,11 @@ export const ConfigPanel = () => {
 
   const handleSave = () => {
     if (selectedNodeId) {
-      updateNode(selectedNodeId, formData);
+      const updatedConfig = buildConfigFromData(selectedNode.type ?? '', formData);
+      updateNode(selectedNodeId, {
+        ...formData,
+        config: { ...(formData.config ?? {}), ...updatedConfig },
+      });
       setSelectedNodeId(null); // Close panel after saving
     }
   };

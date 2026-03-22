@@ -246,7 +246,7 @@ export const SavedPipelinesPanel = ({ onClose, refreshTrigger, onPipelineLoaded 
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(false);
 
-  const { setNodes, setEdges } = usePipelineStore();
+  const { setNodes, setEdges, setActivePipeline } = usePipelineStore();
 
   // Slide-in animation on mount
   useEffect(() => {
@@ -281,6 +281,7 @@ export const SavedPipelinesPanel = ({ onClose, refreshTrigger, onPipelineLoaded 
   const handleLoad = (pipeline: SavedPipeline) => {
     setNodes(pipeline.nodes as unknown as Node<NodeData>[]);
     setEdges(pipeline.edges as unknown as Edge[]);
+    setActivePipeline(pipeline.id, pipeline.name);
     onPipelineLoaded();
     onClose();
   };
