@@ -28,7 +28,7 @@ export async function requireAuth(
   const {
     data: { user },
     error,
-  } = await supabaseAdmin.auth.getUser(token);
+  } = await supabaseAdmin!.auth.getUser(token);
 
   if (error || !user) {
     console.error('[auth] Token validation failed:', error?.message);

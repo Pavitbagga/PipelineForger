@@ -214,4 +214,22 @@ export const apiClient = {
       edges: parsed.edges ?? [],
     };
   },
+
+  /**
+   * Send a message to the copilot and get an intelligent response
+   */
+  sendCopilotMessage: async (
+    userMessage: string,
+    pipeline: { nodes: any[]; edges: any[] }
+  ): Promise<{ response: string }> => {
+    if (USE_MOCK) {
+      const { mockCopilotMessage } = await import('../mocks/api');
+      return mockCopilotMessage(userMessage, pipeline);
+    }
+    const response = await fetchWithAuth(`${API_URL}/api/copilot/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message: userMessage, nodes: pipeline.nodes, edges: pipeline.edges }),
+    });
+    return response.json();
+  },
 };

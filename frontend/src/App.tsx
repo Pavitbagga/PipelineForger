@@ -171,11 +171,17 @@ function App() {
         onOpenHistory={() => setIsHistoryOpen(true)}
       />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <Sidebar />
-        <ReactFlowProvider>
-          <Canvas theme={theme} />
-        </ReactFlowProvider>
-        {selectedNodeId ? <ConfigPanel /> : <CopilotPanel />}
+        <div className="fade-in-stagger-1">
+          <Sidebar />
+        </div>
+        <div className="fade-in-stagger-2" style={{ flex: 1, display: 'flex' }}>
+          <ReactFlowProvider>
+            <Canvas theme={theme} />
+          </ReactFlowProvider>
+        </div>
+        <div className="fade-in-stagger-3">
+          {selectedNodeId ? <ConfigPanel /> : <CopilotPanel />}
+        </div>
       </div>
 
       {isPipelinesOpen && (

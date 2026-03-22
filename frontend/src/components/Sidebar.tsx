@@ -1,5 +1,6 @@
 import { usePipelineStore } from '../store/pipelineStore';
 import { apiClient } from '../lib/apiClient';
+import { useResize } from '../hooks/useResize';
 
 type NodeTypeConfig = {
   type: string;
@@ -25,6 +26,7 @@ const templates = [
 
 export const Sidebar = () => {
   const { setNodes, setEdges, addCopilotMessage } = usePipelineStore();
+  const { size, onMouseDown } = useResize(220, 160, 350, 'horizontal');
 
   const onDragStart = (event: React.DragEvent, nodeType: string) => {
     event.dataTransfer.setData('application/reactflow', nodeType);
@@ -51,16 +53,48 @@ export const Sidebar = () => {
   return (
     <div
       style={{
-        width: '220px',
+        width: `${size}px`,
         background: 'var(--bg-panel)',
         borderRight: '1px solid var(--border)',
-        padding: '20px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
-        overflowY: 'auto',
+        height: '100%',
+        position: 'relative',
       }}
     >
+      {/* Resize handle */}
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: '4px',
+          height: '100%',
+          cursor: 'col-resize',
+          background: 'transparent',
+          zIndex: 10,
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#6366f160';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+        }}
+      />
+
+      {/* Scrollable content */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '20px 16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}
+      >
       {/* Node Types */}
       <div data-tour="node-sidebar">
         <div
@@ -70,7 +104,7 @@ export const Sidebar = () => {
             textTransform: 'uppercase',
             color: 'var(--text-muted)',
             marginBottom: '12px',
-            letterSpacing: '0.5px',
+            letterSpacing: '0.15em',
           }}
         >
           Node Types
@@ -84,22 +118,29 @@ export const Sidebar = () => {
               style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
-                borderLeft: `3px solid ${node.color}`,
+                borderLeft: `4px solid ${node.color}`,
                 borderRadius: '6px',
                 padding: '12px',
                 cursor: 'grab',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
-                transition: 'all 0.2s',
+                transition: 'all 0.3s ease',
+                position: 'relative',
+                overflow: 'hidden',
+                boxShadow: `inset 4px 0 6px ${node.color}15`,
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--bg-base)';
                 e.currentTarget.style.borderLeftWidth = '4px';
+                e.currentTarget.style.boxShadow = `inset 4px 0 10px ${node.color}25`;
+                e.currentTarget.style.backgroundImage = `linear-gradient(90deg, ${node.color}10, transparent)`;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'var(--bg-card)';
-                e.currentTarget.style.borderLeftWidth = '3px';
+                e.currentTarget.style.borderLeftWidth = '4px';
+                e.currentTarget.style.boxShadow = `inset 4px 0 6px ${node.color}15`;
+                e.currentTarget.style.backgroundImage = 'none';
               }}
             >
               <span style={{ fontSize: '18px' }}>{node.icon}</span>
@@ -110,6 +151,7 @@ export const Sidebar = () => {
                     fontWeight: 600,
                     color: 'var(--text-muted)',
                     marginBottom: '2px',
+                    letterSpacing: '0.05em',
                   }}
                 >
                   {node.label}
@@ -121,7 +163,13 @@ export const Sidebar = () => {
       </div>
 
       {/* Divider */}
-      <div style={{ height: '1px', background: 'var(--border)' }} />
+      <div
+        style={{
+          height: '1px',
+          background: 'linear-gradient(90deg, transparent, var(--border), transparent)',
+          margin: '4px 0',
+        }}
+      />
 
       {/* Templates */}
       <div data-tour="templates-sidebar">
@@ -132,7 +180,7 @@ export const Sidebar = () => {
             textTransform: 'uppercase',
             color: 'var(--text-muted)',
             marginBottom: '12px',
-            letterSpacing: '0.5px',
+            letterSpacing: '0.15em',
           }}
         >
           Templates
@@ -151,23 +199,61 @@ export const Sidebar = () => {
                 fontSize: '13px',
                 cursor: 'pointer',
                 textAlign: 'left',
-                transition: 'border-color 0.2s, background 0.2s',
+                transition: 'all 0.3s ease',
                 fontFamily: 'JetBrains Mono, monospace',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--bg-card)';
                 e.currentTarget.style.borderColor = 'var(--accent)';
+                const arrow = e.currentTarget.querySelector('.arrow') as HTMLElement;
+                if (arrow) {
+                  arrow.style.opacity = '1';
+                  arrow.style.transform = 'translateX(0)';
+                }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'var(--btn-ghost-bg)';
                 e.currentTarget.style.borderColor = 'var(--btn-ghost-border)';
+                const arrow = e.currentTarget.querySelector('.arrow') as HTMLElement;
+                if (arrow) {
+                  arrow.style.opacity = '0';
+                  arrow.style.transform = 'translateX(-4px)';
+                }
               }}
             >
-              {template.label}
+              <span>{template.label}</span>
+              <span
+                className="arrow"
+                style={{
+                  opacity: 0,
+                  transform: 'translateX(-4px)',
+                  transition: 'all 0.3s ease',
+                  color: 'var(--accent)',
+                }}
+              >
+                →
+              </span>
             </button>
           ))}
         </div>
       </div>
+      </div>
+
+      {/* Bottom gradient fade */}
+      <div
+        style={{
+          height: '60px',
+          background: 'linear-gradient(to top, var(--bg-panel), transparent)',
+          pointerEvents: 'none',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+        }}
+      />
     </div>
   );
 };

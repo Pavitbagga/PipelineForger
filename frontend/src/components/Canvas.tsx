@@ -181,6 +181,9 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
           // serialisation. Never undefined after creation.
           config: getDefaultConfig(type),
         },
+        style: {
+          animation: 'fade-in-scale 0.4s ease-out',
+        },
       };
 
       // Update both React Flow state and Zustand store
@@ -210,7 +213,13 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
     <div
       data-tour="canvas-area"
       ref={reactFlowWrapper}
-      style={{ flex: 1, background: 'var(--bg-canvas)', position: 'relative' }}
+      style={{
+        flex: 1,
+        background: theme === 'dark'
+          ? 'radial-gradient(ellipse at center, #1a1a3e20 0%, transparent 70%), radial-gradient(ellipse at center, #13131f 0%, var(--bg-canvas) 50%, #0a0a0f 100%)'
+          : 'radial-gradient(ellipse at center, rgba(79, 70, 229, 0.08) 0%, transparent 70%), radial-gradient(ellipse at center, #d8def5 0%, var(--bg-canvas) 50%, #b8bfe8 100%)',
+        position: 'relative',
+      }}
     >
       <ReactFlow
         nodes={nodes}
@@ -224,24 +233,19 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
         nodeTypes={nodeTypes}
         fitView
         style={{
-          background: 'var(--bg-canvas)',
+          background: 'transparent',
         }}
       >
-        {/* Fine cross grid — structural layer */}
-        <Background
-          id="grid"
-          variant={BackgroundVariant.Cross}
-          gap={40}
-          size={14}
-          color={theme === 'light' ? 'rgba(79, 70, 229, 0.10)' : 'rgba(255, 255, 255, 0.04)'}
-        />
-        {/* Large accent dots — on every other grid intersection */}
+        {/* Animated dot grid */}
         <Background
           id="dots"
           variant={BackgroundVariant.Dots}
-          gap={80}
-          size={4}
-          color={theme === 'light' ? 'rgba(79, 70, 229, 0.35)' : 'rgba(99, 102, 241, 0.45)'}
+          gap={20}
+          size={1}
+          color={theme === 'light' ? 'rgba(79, 70, 229, 0.15)' : 'rgba(255, 255, 255, 0.08)'}
+          style={{
+            opacity: 1,
+          }}
         />
         <Controls
           style={{

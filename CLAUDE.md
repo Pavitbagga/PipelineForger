@@ -116,3 +116,12 @@ backend/
 - **Co-pilot scan** (`/api/copilot/scan`) is heavier than the other copilot routes — the frontend debounces it (~30 s).
 - **Sketch flow** (`DrawingCanvasModal`) has four phases: `drawing → interpreting → feedback → refining`. The user can loop through feedback/refining before accepting the generated pipeline.
 - All `JSON.parse` calls on Claude responses are wrapped in try/catch (Claude can return malformed JSON).
+
+## Skills
+
+Before working on any frontend UI task, read and apply the design skill:
+```
+.claude/skills/frontend-design.md
+```
+
+This skill enforces distinctive, production-grade UI — avoid generic AI aesthetics, use bold typography, cohesive color systems, and purposeful motion.

@@ -29,50 +29,70 @@ export async function summarizeHandler(req: Request, res: Response): Promise<voi
 
 // POST /api/history/:id — save a history entry
 router.post('/:id', async (req, res) => {
+  if (!supabaseAdmin) {
+    res.status(503).json({ error: 'Database not configured' });
+    return;
+  }
+
   const { summary, nodes, edges } = req.body as {
     summary: string;
     nodes: unknown[];
     edges: unknown[];
   };
 
-  const { data, error } = await supabaseAdmin
-    .from('pipeline_history')
-    .insert({
-      pipeline_id: req.params.id,
-      user_id: req.user.id,
-      summary,
-      nodes_snapshot: nodes ?? [],
-      edges_snapshot: edges ?? [],
-    })
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('pipeline_history')
+      .insert({
+        pipeline_id: req.params.id,
+        user_id: req.user.id,
+        summary,
+        nodes_snapshot: nodes ?? [],
+        edges_snapshot: edges ?? [],
+      })
+      .select()
+      .single();
 
-  if (error) {
-    console.error('[history:POST] Supabase error:', error.message);
-    res.status(500).json({ error: 'Failed to save history entry' });
-    return;
+    if (error) {
+      console.error('[history:POST] Supabase error:', error.message);
+      res.status(500).json({ error: 'Failed to save history entry' });
+      return;
+    }
+
+    res.status(201).json(data);
+  } catch (err) {
+    console.error('[history:POST] Unexpected error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
-
-  res.status(201).json(data);
 });
 
 // GET /api/history/:id — fetch last 20 history entries
 router.get('/:id', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('pipeline_history')
-    .select('*')
-    .eq('pipeline_id', req.params.id)
-    .eq('user_id', req.user.id)
-    .order('created_at', { ascending: false })
-    .limit(20);
-
-  if (error) {
-    console.error('[history:GET] Supabase error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch history' });
+  if (!supabaseAdmin) {
+    res.status(503).json({ error: 'Database not configured' });
     return;
   }
 
-  res.json(data ?? []);
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('pipeline_history')
+      .select('*')
+      .eq('pipeline_id', req.params.id)
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (error) {
+      console.error('[history:GET] Supabase error:', error.message);
+      res.status(500).json({ error: 'Failed to fetch history' });
+      return;
+    }
+
+    res.json(data ?? []);
+  } catch (err) {
+    console.error('[history:GET] Unexpected error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 export default router;

@@ -2,6 +2,86 @@ import { fetchWithAuth } from './api';
 import type { EngineNode, EngineEdge, PipelineSchema, StepEvent, ExecutionResult } from '../types/engine';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
+
+// ── Mock execution (when VITE_USE_MOCK=true) ─────────────────────────────────
+
+async function mockPipelineExecution(
+  nodes: EngineNode[],
+  input: string,
+  onStep: (event: StepEvent) => void,
+  onComplete: (result: ExecutionResult) => void
+): Promise<void> {
+  // Build node type map
+  const nodeTypeMap = new Map<string, string>();
+  nodes.forEach((n) => nodeTypeMap.set(n.id, n.type));
+
+  // Simulate progressive execution
+  const steps: StepEvent[] = [];
+  let finalOutput = input;
+
+  for (const node of nodes) {
+    // Step 1: Running
+    const runningStep: StepEvent = {
+      nodeId: node.id,
+      nodeType: node.type,
+      status: 'running',
+      input,
+    };
+    onStep(runningStep);
+    steps.push(runningStep);
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Step 2: Success with mock output
+    let mockOutput = '';
+    switch (node.type) {
+      case 'input':
+        mockOutput = input;
+        break;
+      case 'llm':
+        mockOutput = `[Mock LLM Response] Based on your input "${input}", here's a helpful response. This is simulated output from the ${node.config?.model || 'LLM'} node.`;
+        finalOutput = mockOutput;
+        break;
+      case 'tool':
+        mockOutput = `[Mock Tool Result] Tool ${node.config?.toolType || 'unknown'} executed successfully. Sample data returned.`;
+        finalOutput = mockOutput;
+        break;
+      case 'agent':
+        mockOutput = `[Mock Agent Result] Agent completed task: ${node.config?.goal || 'task'}. Steps executed: 3/3.`;
+        finalOutput = mockOutput;
+        break;
+      case 'router':
+        mockOutput = '[Mock Router] Routed to primary path based on input content.';
+        break;
+      case 'output':
+        mockOutput = finalOutput;
+        break;
+      default:
+        mockOutput = `[Mock Output] Node ${node.id} processed successfully.`;
+    }
+
+    const successStep: StepEvent = {
+      nodeId: node.id,
+      nodeType: node.type,
+      status: 'success',
+      input,
+      output: mockOutput,
+      durationMs: Math.floor(Math.random() * 500) + 200,
+    };
+    onStep(successStep);
+    steps.push(successStep);
+    await new Promise((r) => setTimeout(r, 400));
+  }
+
+  // Final completion
+  const result: ExecutionResult = {
+    status: 'success',
+    finalOutput,
+    steps,
+    totalDurationMs: steps.reduce((sum, s) => sum + (s.durationMs || 0), 0),
+  };
+  onComplete(result);
+}
 
 // ── SSE stream reader ─────────────────────────────────────────────────────────
 
@@ -63,6 +143,16 @@ export async function runPipelineFromCanvas(
   onComplete: (result: ExecutionResult) => void,
   onError: (message: string) => void
 ): Promise<void> {
+  // Use mock execution when VITE_USE_MOCK=true
+  if (USE_MOCK) {
+    try {
+      await mockPipelineExecution(nodes, input, onStep, onComplete);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Mock execution failed');
+    }
+    return;
+  }
+
   const pipeline: PipelineSchema = {
     pipeline_version: '1.0',
     id: 'canvas',

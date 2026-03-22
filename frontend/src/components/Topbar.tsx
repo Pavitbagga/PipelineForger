@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { usePipelineStore } from '../store/pipelineStore';
 import { apiClient } from '../lib/apiClient';
 import { fetchWithAuth } from '../lib/api';
+import { localPipelines } from '../lib/localPipelines';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -35,7 +36,6 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
     nodes, edges,
     setNodes, setEdges,
     addCopilotMessage,
-    currentPipelineId,
     activePipelineId,
     activePipelineName,
     lastSavedSnapshot,
@@ -59,9 +59,20 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
     const name = saveModalName.trim() || 'My Pipeline';
     setShowSaveModal(false);
     setIsSaving(true);
+
     try {
       if (activePipelineId) {
         // ── UPDATE existing pipeline ──────────────────────────────────────────
+
+        // Check if this is a localStorage-based pipeline
+        if (activePipelineId.startsWith('local_')) {
+          localPipelines.update(activePipelineId, name, nodes, edges);
+          updateLastSavedSnapshot();
+          setSaveStatus('updated');
+          onPipelineSaved?.();
+          return;
+        }
+
         const prevNodes = (lastSavedSnapshot?.nodes as Array<{ id: string }> | undefined) ?? [];
         const prevEdges = (lastSavedSnapshot?.edges as Array<{ id: string }> | undefined) ?? [];
         const currentNodeIds = nodes.map((n) => n.id);
@@ -77,46 +88,86 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
           `Node types now present: ${[...new Set(nodes.map((n) => n.type))].join(', ')}`,
         ].join(', ');
 
-        const [summarizeRes, updateRes] = await Promise.all([
-          fetchWithAuth(`${API_URL}/api/pipelines/summarize`, {
-            method: 'POST',
-            body: JSON.stringify({
-              pipelineName: name,
-              diffDescription,
-              previousNodeCount: prevNodeIds.length,
-              currentNodeCount: currentNodeIds.length,
+        try {
+          const [summarizeRes, updateRes] = await Promise.all([
+            fetchWithAuth(`${API_URL}/api/pipelines/summarize`, {
+              method: 'POST',
+              body: JSON.stringify({
+                pipelineName: name,
+                diffDescription,
+                previousNodeCount: prevNodeIds.length,
+                currentNodeCount: currentNodeIds.length,
+              }),
             }),
-          }),
-          fetchWithAuth(`${API_URL}/api/pipelines/${activePipelineId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ name, nodes, edges }),
-          }),
-        ]);
+            fetchWithAuth(`${API_URL}/api/pipelines/${activePipelineId}`, {
+              method: 'PUT',
+              body: JSON.stringify({ name, nodes, edges }),
+            }),
+          ]);
 
-        if (!updateRes.ok) throw new Error(`Update failed: HTTP ${updateRes.status}`);
+          // Fallback to localStorage on 503
+          if (updateRes.status === 503) {
+            const localPipe = localPipelines.update(activePipelineId, name, nodes, edges);
+            if (localPipe) {
+              updateLastSavedSnapshot();
+              setSaveStatus('updated');
+              onPipelineSaved?.();
+              return;
+            }
+          }
 
-        const { summary } = summarizeRes.ok
-          ? (await summarizeRes.json() as { summary: string })
-          : { summary: 'Pipeline updated with structural changes.' };
+          if (!updateRes.ok) throw new Error(`Update failed: HTTP ${updateRes.status}`);
 
-        await fetchWithAuth(`${API_URL}/api/history/${activePipelineId}`, {
-          method: 'POST',
-          body: JSON.stringify({ summary, nodes, edges }),
-        });
+          const { summary } = summarizeRes.ok
+            ? (await summarizeRes.json() as { summary: string })
+            : { summary: 'Pipeline updated with structural changes.' };
 
-        updateLastSavedSnapshot();
-        setSaveStatus('updated');
+          await fetchWithAuth(`${API_URL}/api/history/${activePipelineId}`, {
+            method: 'POST',
+            body: JSON.stringify({ summary, nodes, edges }),
+          });
+
+          updateLastSavedSnapshot();
+          setSaveStatus('updated');
+        } catch (apiErr) {
+          // Fallback to localStorage on any API error
+          console.warn('[Topbar] API error, falling back to localStorage:', apiErr);
+          localPipelines.update(activePipelineId, name, nodes, edges);
+          updateLastSavedSnapshot();
+          setSaveStatus('updated');
+        }
       } else {
         // ── CREATE new pipeline ───────────────────────────────────────────────
-        const res = await fetchWithAuth(`${API_URL}/api/pipelines`, {
-          method: 'POST',
-          body: JSON.stringify({ name, nodes, edges }),
-        });
-        if (!res.ok) throw new Error(`Save failed: HTTP ${res.status}`);
-        const saved = await res.json() as { id: string };
-        setActivePipeline(saved.id, name);
-        updateLastSavedSnapshot();
-        setSaveStatus('saved');
+        try {
+          const res = await fetchWithAuth(`${API_URL}/api/pipelines`, {
+            method: 'POST',
+            body: JSON.stringify({ name, nodes, edges }),
+          });
+
+          // Fallback to localStorage on 503
+          if (res.status === 503) {
+            const localPipe = localPipelines.save(name, nodes, edges);
+            setActivePipeline(localPipe.id, name);
+            updateLastSavedSnapshot();
+            setSaveStatus('saved');
+            onPipelineSaved?.();
+            return;
+          }
+
+          if (!res.ok) throw new Error(`Save failed: HTTP ${res.status}`);
+
+          const saved = await res.json() as { id: string };
+          setActivePipeline(saved.id, name);
+          updateLastSavedSnapshot();
+          setSaveStatus('saved');
+        } catch (apiErr) {
+          // Fallback to localStorage on any API error
+          console.warn('[Topbar] API error, falling back to localStorage:', apiErr);
+          const localPipe = localPipelines.save(name, nodes, edges);
+          setActivePipeline(localPipe.id, name);
+          updateLastSavedSnapshot();
+          setSaveStatus('saved');
+        }
       }
       onPipelineSaved?.();
     } catch (err) {
@@ -145,10 +196,42 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
     setIsGenerating(true);
     try {
       const result: any = await apiClient.generatePipeline(intent);
+
+      // Better label fallback logic
+      const getLabelForNode = (node: any): string => {
+        // Priority: explicit label → config.label → smart default based on type → type name
+        if (node.data?.label) return node.data.label;
+        if (node.config?.label) return node.config.label;
+
+        // Smart defaults based on node type and config
+        switch (node.type) {
+          case 'input':
+            return 'User Input';
+          case 'llm':
+            return node.config?.systemPrompt?.slice(0, 30) + '...' || 'Claude LLM';
+          case 'tool':
+            const toolTypeMap: Record<string, string> = {
+              web_search: 'Web Search',
+              code_executor: 'Code Executor',
+              file_reader: 'File Reader',
+              api_caller: 'API Caller',
+            };
+            return toolTypeMap[node.config?.toolType] || 'Tool';
+          case 'agent':
+            return node.config?.goal?.slice(0, 30) + '...' || 'AI Agent';
+          case 'router':
+            return 'Router';
+          case 'output':
+            return 'Result';
+          default:
+            return node.type || 'Node';
+        }
+      };
+
       const transformedNodes = result.nodes.map((node: any) => ({
         ...node,
         data: {
-          label: node.config?.label || node.type || 'Node',
+          label: getLabelForNode(node),
           ...node.config,
           status: 'idle',
         }
@@ -376,9 +459,10 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
 
     <div
       style={{
-        height: '64px',
+        height: '72px',
         background: 'var(--bg-panel)',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
+        boxShadow: '0 1px 20px rgba(99, 102, 241, 0.08)',
         display: 'flex',
         alignItems: 'center',
         padding: '0 24px',
@@ -403,34 +487,49 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
 
       {/* Intent Input */}
       <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <input
-          data-tour="intent-box"
-          type="text"
-          placeholder="Describe what you want to build..."
-          value={intent}
-          onChange={(e) => setIntent(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={isGenerating}
-          style={{
-            flex: 1,
-            height: '40px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            padding: '0 16px',
-            color: 'var(--text-primary)',
-            fontSize: '14px',
-            fontFamily: 'JetBrains Mono, monospace',
-            outline: 'none',
-            transition: 'border-color 0.2s',
-          }}
-          onFocus={(e) => {
-            e.target.style.borderColor = 'var(--accent)';
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = 'var(--border)';
-          }}
-        />
+        <div style={{ flex: 1 }}>
+          <input
+            data-tour="intent-box"
+            type="text"
+            placeholder="Describe what you want to build..."
+            value={intent}
+            onChange={(e) => setIntent(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isGenerating}
+            style={{
+              width: '100%',
+              height: '40px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              padding: '0 16px',
+              color: 'var(--text-primary)',
+              fontSize: '14px',
+              fontFamily: 'JetBrains Mono, monospace',
+              outline: 'none',
+              transition: 'all 0.3s ease',
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = 'var(--accent)';
+              e.target.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.1)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = 'var(--border)';
+              e.target.style.boxShadow = 'none';
+            }}
+          />
+          <div
+            style={{
+              marginTop: '4px',
+              fontSize: '10px',
+              color: 'var(--text-muted)',
+              opacity: 0.6,
+              letterSpacing: '0.02em',
+            }}
+          >
+            Press Enter to generate · Ctrl+Z to undo
+          </div>
+        </div>
         <button
           data-tour="generate-btn"
           onClick={handleGenerate}
@@ -443,14 +542,20 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
             borderRadius: '8px',
             color: 'white',
             fontSize: '14px',
-            fontWeight: 500,
+            fontWeight: 600,
             cursor: isGenerating || !intent.trim() ? 'not-allowed' : 'pointer',
-            opacity: isGenerating || !intent.trim() ? 0.5 : 1,
+            opacity: isGenerating || !intent.trim() ? 0.9 : 1,
             fontFamily: 'JetBrains Mono, monospace',
-            transition: 'opacity 0.2s',
+            transition: 'all 0.3s ease',
+            animation: isGenerating ? 'shimmer 2s linear infinite' : 'none',
+            backgroundImage: isGenerating
+              ? 'linear-gradient(90deg, var(--accent), #7c7ff1, var(--accent))'
+              : 'none',
+            backgroundSize: '200% 100%',
+            boxShadow: isGenerating ? '0 0 16px rgba(99, 102, 241, 0.5)' : 'none',
           }}
         >
-          {isGenerating ? 'Generating...' : 'Generate Pipeline'}
+          {isGenerating ? '⚡ Generating...' : '✨ Generate Pipeline'}
         </button>
       </div>
 
@@ -541,7 +646,7 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
           disabled={nodes.length === 0}
           style={{
             height: '40px',
-            padding: '0 20px',
+            padding: '0 18px',
             background: 'transparent',
             border: '2px solid var(--accent)',
             borderRadius: '8px',
@@ -553,17 +658,21 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
             fontFamily: 'JetBrains Mono, monospace',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            transition: 'background 0.2s',
+            gap: '6px',
+            transition: 'all 0.3s ease',
           }}
           onMouseEnter={(e) => {
-            if (nodes.length > 0) (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.1)';
+            if (nodes.length > 0) {
+              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.15)';
+              (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
+            }
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
           }}
         >
-          <span>▶</span>
+          <span style={{ fontSize: '12px' }}>▶</span>
           <span>Test Run</span>
         </button>
         {/* My Pipelines button */}
@@ -705,17 +814,24 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
             fontFamily: 'JetBrains Mono, monospace',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            transition: 'opacity 0.2s, filter 0.2s',
+            gap: '6px',
+            transition: 'all 0.3s ease',
+            boxShadow: nodes.length > 0 ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none',
           }}
           onMouseEnter={(e) => {
-            if (nodes.length > 0) (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.15)';
+            if (nodes.length > 0) {
+              (e.currentTarget as HTMLButtonElement).style.filter = 'brightness(1.15)';
+              (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)';
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 4px 16px rgba(99, 102, 241, 0.5)';
+            }
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.filter = 'none';
+            (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+            (e.currentTarget as HTMLButtonElement).style.boxShadow = nodes.length > 0 ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none';
           }}
         >
-          <span>🚀</span>
+          <span style={{ fontSize: '14px' }}>🚀</span>
           <span>Ship It</span>
         </button>
 
