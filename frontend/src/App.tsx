@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Topbar } from './components/Topbar';
 import { Sidebar } from './components/Sidebar';
 import { Canvas } from './components/Canvas';
@@ -14,6 +14,16 @@ function App() {
   const [isShipItModalOpen, setIsShipItModalOpen] = useState(false);
   const [isTestRunActive, setIsTestRunActive] = useState(false);
   const [isDrawingOpen, setIsDrawingOpen] = useState(false);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
   const handleShipIt = () => {
     setIsShipItModalOpen(true);
@@ -33,10 +43,10 @@ function App() {
         overflow: 'hidden',
       }}
     >
-      <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} onDraw={() => setIsDrawingOpen(true)} />
+      <Topbar onShipIt={handleShipIt} onTestRun={handleTestRun} onDraw={() => setIsDrawingOpen(true)} onToggleTheme={toggleTheme} theme={theme} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <Sidebar />
-        <Canvas />
+        <Canvas theme={theme} />
         {/* Show ConfigPanel when node is selected, otherwise show CopilotPanel */}
         {selectedNodeId ? <ConfigPanel /> : <CopilotPanel />}
       </div>

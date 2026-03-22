@@ -33,17 +33,33 @@ function transformBackendNode(backendNode: any) {
     api_caller: 'api',
   };
   const { id, type, position, config = {} } = backendNode;
+
+  // Client-side fallback defaults — backend should fill these, but this is a last resort
+  const clientDefaults: Record<string, Record<string, any>> = {
+    llm:    { model: 'claude-sonnet', systemPrompt: 'You are a helpful assistant.', temperature: 0.7 },
+    tool:   { toolType: 'search' },
+    agent:  { goal: 'Complete the assigned task.', maxSteps: 5 },
+    router: { condition: 'Route based on input content.' },
+    input:  {},
+    output: {},
+  };
+  const defaults = clientDefaults[type] ?? {};
+
   return {
     id,
     type,
-    position,
+    position: position ?? { x: 100, y: 300 },
     data: {
-      label: labelMap[type] ?? type,
+      // config.label wins if present (Claude-generated descriptive name); fall back to type map
+      label: config.label ?? labelMap[type] ?? type,
+      ...defaults,
       ...(config.model != null ? { model: modelMap[config.model] ?? config.model } : {}),
       ...(config.systemPrompt != null ? { systemPrompt: config.systemPrompt } : {}),
       ...(config.temperature != null ? { temperature: config.temperature } : {}),
       ...(config.toolType != null ? { toolType: toolTypeMap[config.toolType] ?? config.toolType } : {}),
       ...(config.goal != null ? { goal: config.goal } : {}),
+      ...(config.maxSteps != null ? { maxSteps: config.maxSteps } : {}),
+      ...(config.condition != null ? { condition: config.condition } : {}),
       ...(config.tools != null ? { availableTools: config.tools } : {}),
     },
   };
@@ -188,7 +204,7 @@ export const apiClient = {
     feedback?: string
   ): Promise<{ interpretation: string; nodes: any[]; edges: any[] }> => {
     if (USE_MOCK) {
-      return mockInterpretSketch(imageBase64, feedback);
+      return mockInterpretSketch(imageBase64, feedback) as Promise<{ interpretation: string; nodes: any[]; edges: any[] }>;
     }
     const response = await fetch(`${API_URL}/api/interpret-sketch`, {
       method: 'POST',

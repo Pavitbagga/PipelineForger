@@ -143,15 +143,17 @@ export const CopilotPanel = () => {
             style={{
               width: '36px',
               height: '36px',
-              background: question.trim() ? 'var(--accent)' : 'var(--bg-card)',
+              background: 'var(--accent)',
               border: 'none',
               borderRadius: '6px',
-              color: 'white',
+              color: '#ffffff',
               cursor: question.trim() ? 'pointer' : 'not-allowed',
+              opacity: question.trim() ? 1 : 0.4,
               fontSize: '16px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              transition: 'opacity 0.2s',
             }}
           >
             →

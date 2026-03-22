@@ -5,7 +5,7 @@
   --bg-canvas: #0e0e16;
   --bg-panel: #13131f;
   --bg-card: #1a1a2e;
-  --border: #ffffff12;
+  --border: #ffffff18;
   --accent: #6366f1;
   --accent-cyan: #22d3ee;
   --text-primary: #f0f0ff;
@@ -13,6 +13,34 @@
   --success: #10b981;
   --warning: #f59e0b;
   --error: #f43f5e;
+  --node-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --dot-color: rgba(255, 255, 255, 0.12);
+  /* Ghost button tokens — visible against panels in dark mode */
+  --btn-ghost-bg: rgba(255, 255, 255, 0.06);
+  --btn-ghost-border: rgba(255, 255, 255, 0.2);
+  --btn-ghost-color: #a0a0c0;
+}
+
+[data-theme="light"] {
+  --bg-base: #f0f1fa;
+  /* Deeper blue-violet so white node cards clearly pop */
+  --bg-canvas: #c8cef0;
+  --bg-panel: #ffffff;
+  --bg-card: #f5f5ff;
+  --border: rgba(99, 102, 241, 0.22);
+  --accent: #4f46e5;
+  --accent-cyan: #0891b2;
+  --text-primary: #0f0f1a;
+  --text-muted: #5b6175;
+  --success: #059669;
+  --warning: #d97706;
+  --error: #e11d48;
+  --node-shadow: 0 4px 16px rgba(79, 70, 229, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+  --dot-color: rgba(79, 70, 229, 0.2);
+  /* Ghost button tokens — visible against white panels in light mode */
+  --btn-ghost-bg: rgba(79, 70, 229, 0.07);
+  --btn-ghost-border: rgba(79, 70, 229, 0.35);
+  --btn-ghost-color: #4f46e5;
 }
 
 * {
@@ -42,12 +70,43 @@ h1, h2, h3 {
 /* React Flow custom styles */
 .react-flow__node {
   font-family: 'JetBrains Mono', monospace;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
+
+[data-theme="light"] .react-flow__node {
+  filter: drop-shadow(0 4px 14px rgba(79, 70, 229, 0.18));
 }
 
 .react-flow__edge-path {
   stroke: var(--accent);
-  stroke-dasharray: 5, 5;
-  animation: dash 20s linear infinite;
+  stroke-width: 2;
+  stroke-dasharray: 6, 4;
+  animation: dash 18s linear infinite;
+}
+
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke-width: 3;
+}
+
+/* Light mode — thicker, tighter dash, drop shadow for contrast against pale canvas */
+[data-theme="light"] .react-flow__edge-path {
+  stroke: #3730a3;           /* deeper indigo — higher contrast on #c8cef0 canvas */
+  stroke-width: 3;
+  stroke-dasharray: 8, 3;   /* longer fill, shorter gap = visually heavier line */
+  filter: drop-shadow(0 0 3px rgba(55, 48, 163, 0.5));
+}
+
+[data-theme="light"] .react-flow__edge.selected .react-flow__edge-path,
+[data-theme="light"] .react-flow__edge:hover .react-flow__edge-path {
+  stroke: #312e81;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 6px rgba(49, 46, 129, 0.7));
+}
+
+/* Edge interaction area (invisible but widens the click/hover zone) */
+[data-theme="light"] .react-flow__edge-interaction {
+  stroke-width: 16;
 }
 
 @keyframes dash {
@@ -64,7 +123,13 @@ h1, h2, h3 {
 }
 
 .react-flow__handle-left {
-  background: #6b6b8a;
+  background: var(--text-muted);
+}
+
+/* Light mode handles — more visible dots */
+[data-theme="light"] .react-flow__handle {
+  border: 2.5px solid var(--bg-panel);
+  box-shadow: 0 0 0 1.5px rgba(55, 48, 163, 0.4);
 }
 
 .react-flow__minimap {
@@ -72,9 +137,15 @@ h1, h2, h3 {
   border: 1px solid var(--border);
 }
 
+.react-flow__minimap-mask {
+  fill: var(--bg-canvas);
+  opacity: 0.6;
+}
+
 .react-flow__controls {
   background: var(--bg-panel);
   border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .react-flow__controls button {
@@ -85,4 +156,11 @@ h1, h2, h3 {
 
 .react-flow__controls button:hover {
   background: var(--accent);
+  color: #fff;
+}
+
+/* Light mode: make the attribution readable */
+[data-theme="light"] .react-flow__attribution {
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--text-muted);
 }
