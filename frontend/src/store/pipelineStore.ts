@@ -1,5 +1,19 @@
 import { create } from 'zustand';
 import type { Node, Edge } from '@xyflow/react';
+import { fetchWithAuth } from '../lib/api';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+export type SavedPipeline = {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  nodes: Node<NodeData>[];
+  edges: Edge[];
+  created_at: string;
+  updated_at: string;
+};
 
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -34,6 +48,8 @@ type PipelineStore = {
   selectedNodeId: string | null;
   isRunning: boolean;
   isGeneratingCode: boolean;
+  currentPipelineId: string | null;
+  savedPipelines: SavedPipeline[];
 
   // Actions
   addNode: (node: Node<NodeData>) => void;
@@ -47,9 +63,11 @@ type PipelineStore = {
   setIsGeneratingCode: (isGenerating: boolean) => void;
   loadTemplate: (nodes: Node<NodeData>[], edges: Edge[], message: string) => void;
   clearPipeline: () => void;
+  savePipeline: (name: string) => Promise<void>;
+  loadPipelines: () => Promise<SavedPipeline[]>;
 };
 
-export const usePipelineStore = create<PipelineStore>((set) => ({
+export const usePipelineStore = create<PipelineStore>((set, get) => ({
   nodes: [],
   edges: [],
   copilotMessages: [
@@ -61,6 +79,8 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
   selectedNodeId: null,
   isRunning: false,
   isGeneratingCode: false,
+  currentPipelineId: null,
+  savedPipelines: [],
 
   addNode: (node) =>
     set((state) => ({
@@ -107,5 +127,35 @@ export const usePipelineStore = create<PipelineStore>((set) => ({
       nodes: [],
       edges: [],
       selectedNodeId: null,
+      currentPipelineId: null,
     }),
+
+  savePipeline: async (name: string) => {
+    const { nodes, edges } = get();
+    try {
+      const response = await fetchWithAuth(`${API_URL}/api/pipelines`, {
+        method: 'POST',
+        body: JSON.stringify({ name, nodes, edges }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const saved = (await response.json()) as SavedPipeline;
+      set({ currentPipelineId: saved.id });
+    } catch (err) {
+      console.error('[store] savePipeline failed:', err);
+      throw err;
+    }
+  },
+
+  loadPipelines: async () => {
+    try {
+      const response = await fetchWithAuth(`${API_URL}/api/pipelines`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const pipelines = (await response.json()) as SavedPipeline[];
+      set({ savedPipelines: pipelines });
+      return pipelines;
+    } catch (err) {
+      console.error('[store] loadPipelines failed:', err);
+      throw err;
+    }
+  },
 }));

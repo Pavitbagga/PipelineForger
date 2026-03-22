@@ -6,6 +6,7 @@ import {
   mockLoadTemplate,
   mockInterpretSketch,
 } from '../mocks/api';
+import { fetchWithAuth } from './api';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -108,10 +109,9 @@ export const apiClient = {
     if (USE_MOCK) {
       return mockGeneratePipeline(intent);
     }
-    const response = await fetch(`${API_URL}/api/generate-pipeline`, {
+    const response = await fetchWithAuth(`${API_URL}/api/generate-pipeline`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description: intent }), // backend expects "description"
+      body: JSON.stringify({ description: intent }),
     });
     const parsed = await response.json();
     return {
@@ -124,9 +124,8 @@ export const apiClient = {
     if (USE_MOCK) {
       return mockValidateConnection(sourceType, targetType);
     }
-    const response = await fetch(`${API_URL}/api/validate-connection`, {
+    const response = await fetchWithAuth(`${API_URL}/api/validate-connection`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sourceType, targetType }),
     });
     return response.json();
@@ -136,11 +135,10 @@ export const apiClient = {
     if (USE_MOCK) {
       return mockGenerateCode();
     }
-    const response = await fetch(`${API_URL}/api/generate-code`, {
+    const response = await fetchWithAuth(`${API_URL}/api/generate-code`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        nodes: pipeline.nodes.map(toBackendNode), // backend reads node.config
+        nodes: pipeline.nodes.map(toBackendNode),
         edges: pipeline.edges,
       }),
     });
@@ -165,9 +163,8 @@ export const apiClient = {
       }
       return;
     }
-    const response = await fetch(`${API_URL}/api/test-run`, {
+    const response = await fetchWithAuth(`${API_URL}/api/test-run`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         nodes: pipeline.nodes.map(toBackendNode),
         edges: pipeline.edges,
@@ -195,7 +192,7 @@ export const apiClient = {
     if (USE_MOCK) {
       return mockLoadTemplate(templateName);
     }
-    const response = await fetch(`${API_URL}/api/template/${templateName}`);
+    const response = await fetchWithAuth(`${API_URL}/api/template/${templateName}`);
     return response.json();
   },
 
@@ -206,9 +203,8 @@ export const apiClient = {
     if (USE_MOCK) {
       return mockInterpretSketch(imageBase64, feedback) as Promise<{ interpretation: string; nodes: any[]; edges: any[] }>;
     }
-    const response = await fetch(`${API_URL}/api/interpret-sketch`, {
+    const response = await fetchWithAuth(`${API_URL}/api/interpret-sketch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64, feedback }),
     });
     const parsed = await response.json();

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { usePipelineStore } from '../store/pipelineStore';
 import { apiClient } from '../lib/apiClient';
 
@@ -9,12 +10,44 @@ type TopbarProps = {
   onToggleTheme: () => void;
   theme: 'dark' | 'light';
   onResetTour?: () => void;
+  session: Session | null;
+  onSignOut: () => void;
+  onOpenPipelines: () => void;
+  onPipelineSaved?: () => void;
 };
 
-export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onResetTour }: TopbarProps) => {
+export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onResetTour, session, onSignOut, onOpenPipelines, onPipelineSaved }: TopbarProps) => {
   const [intent, setIntent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const { nodes, setNodes, setEdges, addCopilotMessage } = usePipelineStore();
+  const [isSaving, setIsSaving] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const { nodes, setNodes, setEdges, addCopilotMessage, savePipeline } = usePipelineStore();
+
+  const handleSave = async () => {
+    const name = window.prompt('Pipeline name:', 'My Pipeline');
+    if (!name?.trim()) return;
+    setIsSaving(true);
+    try {
+      await savePipeline(name.trim());
+      onPipelineSaved?.();
+    } catch {
+      console.error('[Topbar] Save failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const displayName = session?.user.user_metadata['full_name'] as string | undefined;
+
+  const initials = (() => {
+    if (displayName) {
+      const words = displayName.trim().split(/\s+/);
+      const first = words[0]?.[0] ?? '';
+      const last = words.length > 1 ? (words[words.length - 1]?.[0] ?? '') : '';
+      return (first + last).toUpperCase();
+    }
+    return (session?.user.email?.[0] ?? '?').toUpperCase();
+  })();
 
   const handleGenerate = async () => {
     if (!intent.trim()) return;
@@ -253,6 +286,74 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
           <span>▶</span>
           <span>Test Run</span>
         </button>
+        {/* My Pipelines button */}
+        <button
+          onClick={onOpenPipelines}
+          style={{
+            height: '40px',
+            padding: '0 16px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+            fontWeight: 500,
+            cursor: 'pointer',
+            fontFamily: 'JetBrains Mono, monospace',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'border-color 0.2s, color 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+          }}
+        >
+          <span>📁</span>
+          <span>My Pipelines</span>
+        </button>
+
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          disabled={nodes.length === 0 || isSaving}
+          style={{
+            height: '40px',
+            padding: '0 16px',
+            background: 'transparent',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            color: 'var(--text-muted)',
+            fontSize: '13px',
+            fontWeight: 500,
+            cursor: nodes.length === 0 || isSaving ? 'not-allowed' : 'pointer',
+            opacity: nodes.length === 0 ? 0.4 : 1,
+            fontFamily: 'JetBrains Mono, monospace',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'border-color 0.2s, color 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            if (nodes.length > 0 && !isSaving) {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+          }}
+        >
+          <span>💾</span>
+          <span>{isSaving ? 'Saving…' : 'Save'}</span>
+        </button>
+
         <button
           data-tour="ship-it-btn"
           onClick={onShipIt}
@@ -284,6 +385,89 @@ export const Topbar = ({ onShipIt, onTestRun, onDraw, onToggleTheme, theme, onRe
           <span>🚀</span>
           <span>Ship It</span>
         </button>
+
+        {/* User avatar + sign-out menu */}
+        {session && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowUserMenu((v) => !v)}
+              title={displayName ?? session.user.email ?? 'Account'}
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: '13px',
+                fontFamily: 'JetBrains Mono, monospace',
+                boxShadow: '0 0 0 2px rgba(99,102,241,0.3)',
+                transition: 'box-shadow 0.2s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.6)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 0 0 2px rgba(99,102,241,0.3)'; }}
+            >
+              {initials}
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '44px',
+                  right: 0,
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                  minWidth: '180px',
+                  zIndex: 200,
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>
+                    {displayName ?? 'User'}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
+                    {session.user.email}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setShowUserMenu(false); onSignOut(); }}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#f43f5e',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(244,63,94,0.08)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
