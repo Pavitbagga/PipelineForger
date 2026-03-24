@@ -4,7 +4,14 @@ import { useResize } from '../hooks/useResize';
 import { apiClient } from '../lib/apiClient';
 
 export const CopilotPanel = () => {
-  const { copilotMessages, addCopilotMessage, nodes, edges } = usePipelineStore();
+  const {
+    copilotMessages,
+    addCopilotMessage,
+    nodes,
+    edges,
+    setNodes,
+    setEdges,
+  } = usePipelineStore();
   const [question, setQuestion] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -30,10 +37,95 @@ export const CopilotPanel = () => {
       // Call the REAL copilot API (or mock that calls real Claude)
       const result = await apiClient.sendCopilotMessage(userMessage, { nodes, edges });
       setIsTyping(false);
+
+      // Display the response message
       addCopilotMessage({
         role: 'claude',
         text: result.response,
       });
+
+      // Execute actions if present
+      if (result.actions && Array.isArray(result.actions)) {
+        let actionsExecuted = 0;
+
+        for (const action of result.actions) {
+          try {
+            switch (action.type) {
+              case 'addNode': {
+                const newNode = {
+                  id: `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  type: action.nodeType,
+                  position: action.position || {
+                    x: 300 + Math.random() * 200,
+                    y: 250 + Math.random() * 100,
+                  },
+                  data: {
+                    label: action.nodeType.charAt(0).toUpperCase() + action.nodeType.slice(1),
+                    status: 'idle',
+                    ...action.config,
+                  },
+                };
+                setNodes([...nodes, newNode]);
+                actionsExecuted++;
+                break;
+              }
+
+              case 'addEdge': {
+                const newEdge = {
+                  id: `e${action.source}-${action.target}`,
+                  source: action.source,
+                  target: action.target,
+                };
+                setEdges([...edges, newEdge]);
+                actionsExecuted++;
+                break;
+              }
+
+              case 'updateNode': {
+                setNodes(
+                  nodes.map((node) =>
+                    node.id === action.nodeId
+                      ? {
+                          ...node,
+                          ...(action.updates.position && { position: action.updates.position }),
+                          ...(action.updates.data && {
+                            data: { ...node.data, ...action.updates.data },
+                          }),
+                        }
+                      : node
+                  )
+                );
+                actionsExecuted++;
+                break;
+              }
+
+              case 'deleteNode': {
+                setNodes(nodes.filter((node) => node.id !== action.nodeId));
+                // Also remove connected edges
+                setEdges(
+                  edges.filter(
+                    (edge) => edge.source !== action.nodeId && edge.target !== action.nodeId
+                  )
+                );
+                actionsExecuted++;
+                break;
+              }
+
+              case 'deleteEdge': {
+                setEdges(edges.filter((edge) => edge.id !== action.edgeId));
+                actionsExecuted++;
+                break;
+              }
+            }
+          } catch (actionError) {
+            console.error('[Copilot] Error executing action:', action, actionError);
+          }
+        }
+
+        if (actionsExecuted > 0) {
+          console.log(`[Copilot] Executed ${actionsExecuted} action(s)`);
+        }
+      }
     } catch (error) {
       console.error('[CopilotPanel] Error calling copilot:', error);
       setIsTyping(false);

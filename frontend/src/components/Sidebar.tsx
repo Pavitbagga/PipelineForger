@@ -1,6 +1,11 @@
 import { usePipelineStore } from '../store/pipelineStore';
 import { apiClient } from '../lib/apiClient';
 import { useResize } from '../hooks/useResize';
+import { getMockTemplate } from '../lib/mocks/demoData';
+import { normalizePipeline } from '../lib/normalizePipeline';
+
+// DEMO MODE: Single source of truth
+const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
 type NodeTypeConfig = {
   type: string;
@@ -34,18 +39,43 @@ export const Sidebar = () => {
   };
 
   const handleTemplateClick = async (templateName: string) => {
-    try {
-      const result: any = await apiClient.loadTemplate(templateName);
-      setNodes(result.nodes);
-      setEdges(result.edges);
+    // 🔴 DEMO MODE: Use mock template directly - NO BACKEND REQUIRED
+    if (DEMO_MODE) {
+      console.log('[Sidebar] DEMO MODE: Loading template from mock data:', templateName);
+      const mockData = getMockTemplate(templateName);
+      const normalized = normalizePipeline(mockData);
+
+      setNodes(normalized.nodes);
+      setEdges(normalized.edges);
       addCopilotMessage({
         role: 'claude',
-        text: result.copilotMessage,
+        text: normalized.copilotMessage,
       });
-    } catch {
+      return;
+    }
+
+    // Real mode: Try backend, fallback to mock on error
+    try {
+      const result: any = await apiClient.loadTemplate(templateName);
+      const normalized = normalizePipeline(result);
+
+      setNodes(normalized.nodes);
+      setEdges(normalized.edges);
       addCopilotMessage({
-        role: 'system',
-        text: 'Failed to load template. Please try again.',
+        role: 'claude',
+        text: normalized.copilotMessage,
+      });
+    } catch (error) {
+      console.error('[Sidebar] Template loading failed, using mock fallback:', error);
+      // FAIL-SAFE: Use mock template as fallback
+      const mockData = getMockTemplate(templateName);
+      const normalized = normalizePipeline(mockData);
+
+      setNodes(normalized.nodes);
+      setEdges(normalized.edges);
+      addCopilotMessage({
+        role: 'claude',
+        text: normalized.copilotMessage + ' (Demo mode fallback)',
       });
     }
   };

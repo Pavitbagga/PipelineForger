@@ -8,37 +8,110 @@ type ShipItModalProps = {
   onClose: () => void;
 };
 
+// Safe fallback code if generation fails
+const FALLBACK_CODE = `# Forge Pipeline Export
+# Generation failed - please try again or check your pipeline configuration
+
+import anthropic
+
+def run_pipeline(user_input: str) -> str:
+    """
+    Placeholder pipeline - replace with your implementation
+    """
+    client = anthropic.Anthropic()
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": user_input}]
+    )
+
+    return message.content[0].text
+
+if __name__ == "__main__":
+    result = run_pipeline("Hello, how can you help?")
+    print(result)
+`;
+
 export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
   const { nodes, edges, setIsGeneratingCode } = usePipelineStore();
   const [generatedCode, setGeneratedCode] = useState('');
   const [requiredKeys, setRequiredKeys] = useState<string[]>([]);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && nodes.length > 0) {
-      generateCode();
+    if (isOpen) {
+      // Reset state when modal opens
+      setError(null);
+      setGeneratedCode('');
+      setRequiredKeys([]);
+      setApiKeys({});
+
+      // Only generate if we have nodes
+      if (nodes.length > 0) {
+        generateCode();
+      } else {
+        setError('No nodes in pipeline. Create a pipeline first before exporting.');
+        setGeneratedCode(FALLBACK_CODE);
+      }
     }
     // generateCode is intentionally omitted: including it would re-trigger on every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, nodes]);
+  }, [isOpen]);
 
   const generateCode = async () => {
     setIsLoading(true);
     setIsGeneratingCode(true);
+    setError(null); // Reset error state
+
     try {
       const result: any = await apiClient.generateCode({ nodes, edges });
-      setGeneratedCode(result.code);
-      setRequiredKeys(result.requiredKeys);
 
-      // Initialize API keys object
-      const keys: Record<string, string> = {};
-      result.requiredKeys.forEach((key: string) => {
-        keys[key] = '';
-      });
-      setApiKeys(keys);
-    } catch (error) {
-      console.error('Failed to generate code:', error);
+      // 🛡️ DEFENSIVE GUARDS: Validate API response structure
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid API response: result is not an object');
+      }
+
+      // Validate code field
+      const code = result.code;
+      if (typeof code !== 'string' || code.trim() === '') {
+        console.warn('[ShipIt] Invalid code in API response, using fallback');
+        setGeneratedCode(FALLBACK_CODE);
+      } else {
+        setGeneratedCode(code);
+      }
+
+      // Validate requiredKeys field
+      const keys = result.requiredKeys;
+      if (!Array.isArray(keys)) {
+        console.warn('[ShipIt] Invalid requiredKeys in API response, using empty array');
+        setRequiredKeys([]);
+        setApiKeys({});
+      } else {
+        setRequiredKeys(keys);
+
+        // Initialize API keys object
+        const apiKeysObj: Record<string, string> = {};
+        keys.forEach((key: string) => {
+          if (typeof key === 'string') {
+            apiKeysObj[key] = '';
+          }
+        });
+        setApiKeys(apiKeysObj);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[ShipIt] Failed to generate code:', errorMessage);
+
+      // Set error state for UI
+      setError(`Code generation failed: ${errorMessage}`);
+
+      // Use fallback code so modal is still functional
+      setGeneratedCode(FALLBACK_CODE);
+      setRequiredKeys([]);
+      setApiKeys({});
     } finally {
       setIsLoading(false);
       setIsGeneratingCode(false);
@@ -46,27 +119,37 @@ export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
   };
 
   const handleDownload = async () => {
-    const zip = new JSZip();
+    try {
+      const zip = new JSZip();
 
-    // Add the generated code
-    zip.file('pipeline.py', generatedCode);
+      // Add the generated code (with safety check)
+      const codeToExport = typeof generatedCode === 'string' && generatedCode.trim()
+        ? generatedCode
+        : FALLBACK_CODE;
+      zip.file('pipeline.py', codeToExport);
 
-    // Add .env file with API keys
-    const envContent = Object.entries(apiKeys)
-      .map(([key, value]) => `${key}=${value || 'your-key-here'}`)
-      .join('\n');
-    zip.file('.env', envContent);
+      // Add .env file with API keys (with safety check)
+      const safeApiKeys = typeof apiKeys === 'object' && apiKeys !== null ? apiKeys : {};
+      const envContent = Object.entries(safeApiKeys)
+        .filter(([key]) => typeof key === 'string')
+        .map(([key, value]) => `${key}=${value || 'your-key-here'}`)
+        .join('\n');
+      zip.file('.env', envContent || '# No API keys required\n');
 
-    // Add requirements.txt
-    const requirements = `anthropic
+      // Add requirements.txt
+      const requirements = `anthropic
 openai
 google-generativeai
 python-dotenv
 requests`;
-    zip.file('requirements.txt', requirements);
+      zip.file('requirements.txt', requirements);
 
-    // Add README
-    const readme = `# AI Pipeline - Generated by Forge
+      // Add README (with safety check for API keys list)
+      const apiKeysList = Object.keys(safeApiKeys).length > 0
+        ? Object.keys(safeApiKeys).map((key) => `   - ${key}`).join('\n')
+        : '   - No API keys required';
+
+      const readme = `# AI Pipeline - Generated by Forge
 
 ## Setup
 
@@ -76,9 +159,7 @@ requests`;
    \`\`\`
 
 2. Configure your API keys in \`.env\`:
-${Object.keys(apiKeys)
-  .map((key) => `   - ${key}`)
-  .join('\n')}
+${apiKeysList}
 
 3. Run the pipeline:
    \`\`\`bash
@@ -88,18 +169,22 @@ ${Object.keys(apiKeys)
 ## Generated with Forge ⚡
 Build multi-LLM pipelines visually and ship them as real code.
 `;
-    zip.file('README.md', readme);
+      zip.file('README.md', readme);
 
-    // Generate and download the ZIP file
-    const content = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(content);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'forge-pipeline.zip';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+      // Generate and download the ZIP file
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'forge-pipeline.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[ShipIt] Download failed:', err);
+      alert('Failed to generate download. Please try again.');
+    }
   };
 
   if (!isOpen) return null;
@@ -218,6 +303,41 @@ Build multi-LLM pipelines visually and ship them as real code.
                   `}
                 </style>
               </div>
+            ) : error ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  padding: '40px',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div style={{ fontSize: '48px' }}>⚠️</div>
+                <div
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '14px',
+                    color: '#f43f5e',
+                    textAlign: 'center',
+                    maxWidth: '400px',
+                  }}
+                >
+                  {error}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '12px',
+                    color: '#8b949e',
+                    textAlign: 'center',
+                  }}
+                >
+                  Fallback code has been loaded below. You can still download the project.
+                </div>
+              </div>
             ) : (
               <>
                 {/* Terminal Prompt Header */}
@@ -257,7 +377,7 @@ Build multi-LLM pipelines visually and ship them as real code.
                     background: 'transparent',
                   }}
                 >
-                  {generatedCode}
+                  {typeof generatedCode === 'string' ? generatedCode : FALLBACK_CODE}
                 </pre>
               </>
             )}
@@ -342,7 +462,7 @@ Build multi-LLM pipelines visually and ship them as real code.
               >
                 Required API Keys
               </div>
-              {requiredKeys.length === 0 ? (
+              {!Array.isArray(requiredKeys) || requiredKeys.length === 0 ? (
                 <div
                   style={{
                     fontSize: '13px',
@@ -353,7 +473,7 @@ Build multi-LLM pipelines visually and ship them as real code.
                   No API keys required for this pipeline.
                 </div>
               ) : (
-                requiredKeys.map((key) => (
+                requiredKeys.filter((key) => typeof key === 'string').map((key) => (
                   <div key={key} style={{ marginBottom: '16px' }}>
                     <label
                       style={{

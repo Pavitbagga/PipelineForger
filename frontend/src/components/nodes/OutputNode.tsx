@@ -1,6 +1,8 @@
 import { memo, useState } from 'react';
 import { Handle, Position, type NodeProps, useReactFlow } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
+import { EthicsWarningBadge } from '../EthicsWarningBadge';
+import { useEthicsRisks } from '../../hooks/useEthicsRisks';
 
 const OutputNode = ({ data: rawData, selected, id }: NodeProps) => {
   const data = rawData as NodeData;
@@ -8,6 +10,8 @@ const OutputNode = ({ data: rawData, selected, id }: NodeProps) => {
   const isRunning = data.status === 'running';
   const [isHovered, setIsHovered] = useState(false);
   const { deleteElements } = useReactFlow();
+  const { getRiskForNode } = useEthicsRisks();
+  const ethicsRisk = getRiskForNode(id);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,6 +51,9 @@ const OutputNode = ({ data: rawData, selected, id }: NodeProps) => {
         }
       }}
     >
+      {/* Ethics Warning Badge */}
+      <EthicsWarningBadge risk={ethicsRisk} />
+
       {/* Delete button */}
       {(isHovered || selected) && (
         <button
