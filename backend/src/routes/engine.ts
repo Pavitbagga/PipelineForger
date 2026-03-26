@@ -88,6 +88,12 @@ router.post('/:pipelineId/run', async (req: Request, res: Response): Promise<voi
     return;
   }
 
+  // Check if Supabase is configured
+  if (!supabaseAdmin) {
+    res.status(503).json({ error: 'Database not configured' });
+    return;
+  }
+
   // Fetch saved pipeline from Supabase
   const { data: saved, error } = await supabaseAdmin
     .from('pipelines')
@@ -119,7 +125,7 @@ router.post('/:pipelineId/run', async (req: Request, res: Response): Promise<voi
   const executionResult = await runWithSSE(res, pipeline, input);
 
   // Persist execution history (best-effort — do not fail the response)
-  if (executionResult) {
+  if (executionResult && supabaseAdmin) {
     supabaseAdmin
       .from('pipeline_executions')
       .insert({
@@ -145,7 +151,7 @@ router.post('/:pipelineId/run', async (req: Request, res: Response): Promise<voi
 router.get('/:pipelineId/executions', async (req: Request, res: Response): Promise<void> => {
   const { pipelineId } = req.params;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin!
     .from('pipeline_executions')
     .select('*')
     .eq('pipeline_id', pipelineId)

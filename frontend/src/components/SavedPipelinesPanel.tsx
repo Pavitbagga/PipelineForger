@@ -4,8 +4,12 @@ import type { NodeData } from '../store/pipelineStore';
 import { usePipelineStore } from '../store/pipelineStore';
 import { fetchWithAuth } from '../lib/api';
 import type { SavedPipeline } from '../types/pipeline';
+import { localPipelines } from '../lib/localPipelines';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+// Track if we're using localStorage fallback
+let useLocalStorage = false;
 
 // ── Skeleton card ──────────────────────────────────────────────────────────────
 
@@ -261,14 +265,35 @@ export const SavedPipelinesPanel = ({ onClose, refreshTrigger, onPipelineLoaded 
     const load = async () => {
       setLoading(true);
       setError(null);
+
       try {
         const res = await fetchWithAuth(`${API_URL}/api/pipelines`);
+
+        // If database not configured (503), use localStorage
+        if (res.status === 503) {
+          useLocalStorage = true;
+          const localData = localPipelines.getAll();
+          if (!cancelled) {
+            setPipelines(localData as unknown as SavedPipeline[]);
+            setError(null);
+          }
+          return;
+        }
+
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        useLocalStorage = false;
         const data = (await res.json()) as SavedPipeline[];
         if (!cancelled) setPipelines(data);
       } catch (err) {
-        if (!cancelled) setError('Failed to load pipelines.');
-        console.error('[SavedPipelinesPanel] fetch error:', err);
+        // Fallback to localStorage on any network error
+        console.warn('[SavedPipelinesPanel] API error, falling back to localStorage:', err);
+        useLocalStorage = true;
+        const localData = localPipelines.getAll();
+        if (!cancelled) {
+          setPipelines(localData as unknown as SavedPipeline[]);
+          setError(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -290,9 +315,14 @@ export const SavedPipelinesPanel = ({ onClose, refreshTrigger, onPipelineLoaded 
     // Optimistic removal
     const prev = pipelines;
     setPipelines((ps) => ps.filter((p) => p.id !== id));
+
     try {
-      const res = await fetchWithAuth(`${API_URL}/api/pipelines/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (useLocalStorage) {
+        localPipelines.delete(id);
+      } else {
+        const res = await fetchWithAuth(`${API_URL}/api/pipelines/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }
     } catch (err) {
       // Revert and re-throw so the card can show an error
       setPipelines(prev);

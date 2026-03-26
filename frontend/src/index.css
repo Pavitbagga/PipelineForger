@@ -19,6 +19,11 @@
   --btn-ghost-bg: rgba(255, 255, 255, 0.06);
   --btn-ghost-border: rgba(255, 255, 255, 0.2);
   --btn-ghost-color: #a0a0c0;
+  /* Premium design tokens */
+  --glow-accent: rgba(99, 102, 241, 0.4);
+  --glow-accent-strong: rgba(99, 102, 241, 0.6);
+  --shimmer-from: rgba(255, 255, 255, 0.0);
+  --shimmer-to: rgba(255, 255, 255, 0.1);
 }
 
 [data-theme="light"] {
@@ -57,6 +62,26 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Premium grain texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.04;
+  z-index: 9999;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3.5' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none !important;
+  }
+}
+
 h1, h2, h3 {
   font-family: 'Syne', sans-serif;
 }
@@ -81,12 +106,16 @@ h1, h2, h3 {
   stroke: var(--accent);
   stroke-width: 2;
   stroke-dasharray: 6, 4;
-  animation: dash 18s linear infinite;
+  animation: dash 20s ease-in-out infinite;
+  filter: drop-shadow(0 0 3px var(--glow-accent));
+  transition: all 0.3s ease;
 }
 
 .react-flow__edge.selected .react-flow__edge-path,
 .react-flow__edge:hover .react-flow__edge-path {
   stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--glow-accent-strong));
+  stroke: #7c7ff1;
 }
 
 /* Light mode — thicker, tighter dash, drop shadow for contrast against pale canvas */
@@ -95,13 +124,15 @@ h1, h2, h3 {
   stroke-width: 3;
   stroke-dasharray: 8, 3;   /* longer fill, shorter gap = visually heavier line */
   filter: drop-shadow(0 0 3px rgba(55, 48, 163, 0.5));
+  animation: dash 20s ease-in-out infinite;
+  transition: all 0.3s ease;
 }
 
 [data-theme="light"] .react-flow__edge.selected .react-flow__edge-path,
 [data-theme="light"] .react-flow__edge:hover .react-flow__edge-path {
   stroke: #312e81;
   stroke-width: 4;
-  filter: drop-shadow(0 0 6px rgba(49, 46, 129, 0.7));
+  filter: drop-shadow(0 0 8px rgba(49, 46, 129, 0.8));
 }
 
 /* Edge interaction area (invisible but widens the click/hover zone) */
@@ -110,7 +141,10 @@ h1, h2, h3 {
 }
 
 @keyframes dash {
-  to {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
     stroke-dashoffset: -100;
   }
 }
@@ -163,4 +197,133 @@ h1, h2, h3 {
 [data-theme="light"] .react-flow__attribution {
   background: rgba(255, 255, 255, 0.8);
   color: var(--text-muted);
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Premium Animations & Keyframes
+   ────────────────────────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px var(--glow-accent);
+  }
+  50% {
+    box-shadow: 0 0 16px var(--glow-accent-strong);
+  }
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.4);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-scale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dot-pulse {
+  0%, 80%, 100% {
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Staggered fade-in delays for page load */
+.fade-in-stagger-1 {
+  animation: fade-in 0.5s ease-out;
+}
+
+.fade-in-stagger-2 {
+  animation: fade-in 0.5s ease-out 0.1s both;
+}
+
+.fade-in-stagger-3 {
+  animation: fade-in 0.5s ease-out 0.2s both;
+}
+
+/* Button active/click micro-interaction */
+button:active:not(:disabled) {
+  transform: scale(0.97) !important;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .fade-in-stagger-1,
+  .fade-in-stagger-2,
+  .fade-in-stagger-3 {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+
+  button:active:not(:disabled) {
+    transform: none !important;
+  }
+
+  .react-flow__node {
+    transition: none !important;
+  }
 }

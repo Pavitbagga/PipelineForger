@@ -1,88 +1,117 @@
 import { useState, useEffect } from 'react';
 import JSZip from 'jszip';
 import { usePipelineStore } from '../store/pipelineStore';
-import type { NodeData } from '../store/pipelineStore';
-import { fetchWithAuth } from '../lib/api';
-// ADD THIS: needed to sanitise nodes before sending to the backend
-import { getDefaultConfig } from '../lib/nodeDefaults';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
-type ShipFile = {
-  name: string;
-  content: string;
-  encoding: string;
-};
+import { apiClient } from '../lib/apiClient';
 
 type ShipItModalProps = {
   isOpen: boolean;
   onClose: () => void;
 };
 
-const FILE_ICONS: Record<string, string> = {
-  'pipeline.json': '📋',
-  'run.py': '▶',
-  'forge_runner.py': '⚙',
-  'README.md': '📖',
-};
+// Safe fallback code if generation fails
+const FALLBACK_CODE = `# Forge Pipeline Export
+# Generation failed - please try again or check your pipeline configuration
+
+import anthropic
+
+def run_pipeline(user_input: str) -> str:
+    """
+    Placeholder pipeline - replace with your implementation
+    """
+    client = anthropic.Anthropic()
+
+    message = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": user_input}]
+    )
+
+    return message.content[0].text
+
+if __name__ == "__main__":
+    result = run_pipeline("Hello, how can you help?")
+    print(result)
+`;
 
 export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
   const { nodes, edges, setIsGeneratingCode } = usePipelineStore();
-  const [files, setFiles] = useState<ShipFile[]>([]);
-  // ADD THIS: warnings returned from the server when nodes use default config
-  const [exportWarnings, setExportWarnings] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState(0);
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [requiredKeys, setRequiredKeys] = useState<string[]>([]);
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pipelineName, setPipelineName] = useState('My Pipeline');
 
   useEffect(() => {
-    if (isOpen && nodes.length > 0) {
-      void generateExport();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, nodes]);
+    if (isOpen) {
+      // Reset state when modal opens
+      setError(null);
+      setGeneratedCode('');
+      setRequiredKeys([]);
+      setApiKeys({});
 
-  const generateExport = async () => {
+      // Only generate if we have nodes
+      if (nodes.length > 0) {
+        generateCode();
+      } else {
+        setError('No nodes in pipeline. Create a pipeline first before exporting.');
+        setGeneratedCode(FALLBACK_CODE);
+      }
+    }
+    // generateCode is intentionally omitted: including it would re-trigger on every render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const generateCode = async () => {
     setIsLoading(true);
     setIsGeneratingCode(true);
-    setError(null);
-    setFiles([]);
-    // ADD THIS: reset warnings on each generation
-    setExportWarnings([]);
-    setActiveTab(0);
+    setError(null); // Reset error state
 
     try {
-      // ADD THIS: convert React Flow nodes → EngineNode format before sending.
-      // node.data.config is the backend-ready config injected at creation time.
-      // Fall back to getDefaultConfig so nodes created before this fix still work.
-      const engineNodes = nodes.map((node) => ({
-        id: node.id,
-        type: node.type ?? 'output',
-        position: node.position,
-        config: (node.data as NodeData).config ?? getDefaultConfig(node.type ?? ''),
-        inputs: ['text'],
-        outputs: ['text'],
-        label: (node.data as NodeData).label,
-      }));
+      const result: any = await apiClient.generateCode({ nodes, edges });
 
-      const response = await fetchWithAuth(`${API_URL}/api/generate-code`, {
-        method: 'POST',
-        body: JSON.stringify({ nodes: engineNodes, edges, name: pipelineName }),
-      });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({})) as Record<string, unknown>;
-        const errs = body['errors'] as string[] | undefined;
-        throw new Error(errs ? errs.join('; ') : `HTTP ${response.status}`);
+      // 🛡️ DEFENSIVE GUARDS: Validate API response structure
+      if (!result || typeof result !== 'object') {
+        throw new Error('Invalid API response: result is not an object');
       }
 
-      // CHANGE THIS: destructure warnings from the response
-      const result = await response.json() as { files: ShipFile[]; warnings?: string[] };
-      setFiles(result.files ?? []);
-      setExportWarnings(result.warnings ?? []);
+      // Validate code field
+      const code = result.code;
+      if (typeof code !== 'string' || code.trim() === '') {
+        console.warn('[ShipIt] Invalid code in API response, using fallback');
+        setGeneratedCode(FALLBACK_CODE);
+      } else {
+        setGeneratedCode(code);
+      }
+
+      // Validate requiredKeys field
+      const keys = result.requiredKeys;
+      if (!Array.isArray(keys)) {
+        console.warn('[ShipIt] Invalid requiredKeys in API response, using empty array');
+        setRequiredKeys([]);
+        setApiKeys({});
+      } else {
+        setRequiredKeys(keys);
+
+        // Initialize API keys object
+        const apiKeysObj: Record<string, string> = {};
+        keys.forEach((key: string) => {
+          if (typeof key === 'string') {
+            apiKeysObj[key] = '';
+          }
+        });
+        setApiKeys(apiKeysObj);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate export');
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[ShipIt] Failed to generate code:', errorMessage);
+
+      // Set error state for UI
+      setError(`Code generation failed: ${errorMessage}`);
+
+      // Use fallback code so modal is still functional
+      setGeneratedCode(FALLBACK_CODE);
+      setRequiredKeys([]);
+      setApiKeys({});
     } finally {
       setIsLoading(false);
       setIsGeneratingCode(false);
@@ -90,34 +119,84 @@ export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
   };
 
   const handleDownload = async () => {
-    if (files.length === 0) return;
+    try {
+      const zip = new JSZip();
 
-    const zip = new JSZip();
-    for (const file of files) {
-      zip.file(file.name, file.content);
+      // Add the generated code (with safety check)
+      const codeToExport = typeof generatedCode === 'string' && generatedCode.trim()
+        ? generatedCode
+        : FALLBACK_CODE;
+      zip.file('pipeline.py', codeToExport);
+
+      // Add .env file with API keys (with safety check)
+      const safeApiKeys = typeof apiKeys === 'object' && apiKeys !== null ? apiKeys : {};
+      const envContent = Object.entries(safeApiKeys)
+        .filter(([key]) => typeof key === 'string')
+        .map(([key, value]) => `${key}=${value || 'your-key-here'}`)
+        .join('\n');
+      zip.file('.env', envContent || '# No API keys required\n');
+
+      // Add requirements.txt
+      const requirements = `anthropic
+openai
+google-generativeai
+python-dotenv
+requests`;
+      zip.file('requirements.txt', requirements);
+
+      // Add README (with safety check for API keys list)
+      const apiKeysList = Object.keys(safeApiKeys).length > 0
+        ? Object.keys(safeApiKeys).map((key) => `   - ${key}`).join('\n')
+        : '   - No API keys required';
+
+      const readme = `# AI Pipeline - Generated by Forge
+
+## Setup
+
+1. Install dependencies:
+   \`\`\`bash
+   pip install -r requirements.txt
+   \`\`\`
+
+2. Configure your API keys in \`.env\`:
+${apiKeysList}
+
+3. Run the pipeline:
+   \`\`\`bash
+   python pipeline.py
+   \`\`\`
+
+## Generated with Forge ⚡
+Build multi-LLM pipelines visually and ship them as real code.
+`;
+      zip.file('README.md', readme);
+
+      // Generate and download the ZIP file
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'forge-pipeline.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[ShipIt] Download failed:', err);
+      alert('Failed to generate download. Please try again.');
     }
-
-    const safeName = pipelineName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    const content = await zip.generateAsync({ type: 'blob' });
-    const url = URL.createObjectURL(content);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName || 'pipeline'}-forge.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   if (!isOpen) return null;
-
-  const activeFile = files[activeTab];
 
   return (
     <div
       style={{
         position: 'fixed',
-        top: 0, left: 0, right: 0, bottom: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         background: 'rgba(0, 0, 0, 0.85)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
@@ -135,26 +214,29 @@ export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
           border: '1px solid var(--border)',
           borderRadius: '12px',
           width: '100%',
-          maxWidth: '1100px',
+          maxWidth: '1200px',
           height: '80vh',
           display: 'flex',
-          flexDirection: 'column',
           overflow: 'hidden',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
         }}
       >
-        {/* ── Modal header ── */}
+        {/* Left Panel - Code Preview */}
         <div
           style={{
-            padding: '20px 28px',
-            borderBottom: '1px solid var(--border)',
+            flex: 1,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexShrink: 0,
+            flexDirection: 'column',
+            borderRight: '1px solid var(--border)',
           }}
         >
-          <div>
+          {/* Header */}
+          <div
+            style={{
+              padding: '24px',
+              borderBottom: '1px solid var(--border)',
+            }}
+          >
             <div
               style={{
                 fontFamily: 'Syne, sans-serif',
@@ -166,57 +248,179 @@ export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
               }}
             >
               <span>🚀</span>
-              <span>Ship It</span>
+              <span>Generated Pipeline Code</span>
             </div>
-            <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              Export your pipeline as a self-contained Python project
+            <div
+              style={{
+                fontSize: '13px',
+                color: 'var(--text-muted)',
+                marginTop: '4px',
+              }}
+            >
+              Production-ready Python code for your AI pipeline
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Pipeline name input */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                Name:
-              </label>
-              <input
-                value={pipelineName}
-                onChange={(e) => setPipelineName(e.target.value)}
+          {/* Code Display - Terminal Style */}
+          <div
+            style={{
+              flex: 1,
+              overflow: 'auto',
+              background: '#0d1117',
+              position: 'relative',
+            }}
+          >
+            {isLoading ? (
+              <div
                 style={{
-                  height: '32px',
-                  padding: '0 10px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  outline: 'none',
-                  width: '160px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  color: '#10b981',
+                  flexDirection: 'column',
+                  gap: '16px',
                 }}
-                onFocus={(e) => { e.target.style.borderColor = 'var(--accent)'; }}
-                onBlur={(e) => { e.target.style.borderColor = 'var(--border)'; }}
-              />
-              <button
-                onClick={() => void generateExport()}
-                disabled={isLoading}
-                style={{
-                  height: '32px',
-                  padding: '0 14px',
-                  background: 'transparent',
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  color: 'var(--text-muted)',
-                  fontSize: '12px',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'JetBrains Mono, monospace',
-                  opacity: isLoading ? 0.5 : 1,
-                }}
-                onMouseEnter={(e) => { if (!isLoading) e.currentTarget.style.borderColor = 'var(--accent)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
               >
-                Regenerate
-              </button>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '3px solid rgba(16, 185, 129, 0.2)',
+                    borderTopColor: '#10b981',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }}
+                />
+                <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '13px' }}>
+                  $ Compiling pipeline...
+                </div>
+                <style>
+                  {`
+                    @keyframes spin {
+                      to { transform: rotate(360deg); }
+                    }
+                  `}
+                </style>
+              </div>
+            ) : error ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  padding: '40px',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                <div style={{ fontSize: '48px' }}>⚠️</div>
+                <div
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '14px',
+                    color: '#f43f5e',
+                    textAlign: 'center',
+                    maxWidth: '400px',
+                  }}
+                >
+                  {error}
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '12px',
+                    color: '#8b949e',
+                    textAlign: 'center',
+                  }}
+                >
+                  Fallback code has been loaded below. You can still download the project.
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Terminal Prompt Header */}
+                <div
+                  style={{
+                    padding: '12px 24px',
+                    background: '#161b22',
+                    borderBottom: '1px solid #30363d',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '12px',
+                    color: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 1,
+                  }}
+                >
+                  <span style={{ color: '#f59e0b' }}>⚡</span>
+                  <span style={{ color: '#8b949e' }}>forge@terminal:</span>
+                  <span>~</span>
+                  <span style={{ color: '#8b949e' }}>$</span>
+                  <span style={{ color: '#58a6ff' }}>python pipeline.py</span>
+                </div>
+                {/* Code Content */}
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: '24px',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: '13px',
+                    lineHeight: '1.7',
+                    color: '#c9d1d9',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    background: 'transparent',
+                  }}
+                >
+                  {typeof generatedCode === 'string' ? generatedCode : FALLBACK_CODE}
+                </pre>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel - Configuration */}
+        <div
+          style={{
+            width: '380px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              padding: '24px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontFamily: 'Syne, sans-serif',
+                  fontSize: '18px',
+                  fontWeight: 600,
+                }}
+              >
+                Configuration
+              </div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--text-muted)',
+                  marginTop: '2px',
+                }}
+              >
+                Set up your API keys
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -233,296 +437,159 @@ export const ShipItModal = ({ isOpen, onClose }: ShipItModalProps) => {
               ×
             </button>
           </div>
-        </div>
 
-        {/* ADD THIS: yellow warnings banner — shown when nodes have default configs */}
-        {!isLoading && exportWarnings.length > 0 && (
-          <div
-            style={{
-              background: 'rgba(245,158,11,0.08)',
-              borderBottom: '1px solid rgba(245,158,11,0.3)',
-              padding: '10px 20px',
-              flexShrink: 0,
-            }}
-          >
-            <div
-              style={{
-                fontSize: '12px',
-                color: '#f59e0b',
-                fontWeight: 600,
-                marginBottom: exportWarnings.length > 0 ? '6px' : 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <span>⚠</span>
-              <span>
-                Some nodes are using default configuration. Click any node on the canvas to
-                configure it before exporting for production use.
-              </span>
-            </div>
-            <ul style={{ margin: 0, paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {exportWarnings.map((w, i) => (
-                <li
-                  key={i}
-                  style={{
-                    fontSize: '11px',
-                    color: 'rgba(245,158,11,0.85)',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  {w}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* ── Body ── */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* Left: file tabs + code preview */}
+          {/* API Keys Form */}
           <div
             style={{
               flex: 1,
+              overflowY: 'auto',
+              padding: '24px',
               display: 'flex',
               flexDirection: 'column',
-              borderRight: '1px solid var(--border)',
+              gap: '20px',
             }}
           >
-            {/* File tabs */}
-            {files.length > 0 && (
+            <div>
               <div
                 style={{
-                  display: 'flex',
-                  borderBottom: '1px solid var(--border)',
-                  flexShrink: 0,
-                  overflowX: 'auto',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: 'var(--text-muted)',
+                  marginBottom: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
                 }}
               >
-                {files.map((file, i) => (
-                  <button
-                    key={file.name}
-                    onClick={() => setActiveTab(i)}
-                    style={{
-                      height: '40px',
-                      padding: '0 16px',
-                      background: activeTab === i ? 'var(--bg-base)' : 'transparent',
-                      border: 'none',
-                      borderBottom: activeTab === i ? '2px solid var(--accent)' : '2px solid transparent',
-                      borderRight: '1px solid var(--border)',
-                      color: activeTab === i ? 'var(--text-primary)' : 'var(--text-muted)',
-                      fontSize: '12px',
-                      fontFamily: 'JetBrains Mono, monospace',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      whiteSpace: 'nowrap',
-                      transition: 'color 0.15s',
-                    }}
-                  >
-                    <span>{FILE_ICONS[file.name] ?? '📄'}</span>
-                    <span>{file.name}</span>
-                  </button>
-                ))}
+                Required API Keys
               </div>
-            )}
-
-            {/* Code area */}
-            <div style={{ flex: 1, overflow: 'auto', background: 'var(--bg-base)' }}>
-              {isLoading && (
+              {!Array.isArray(requiredKeys) || requiredKeys.length === 0 ? (
                 <div
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    flexDirection: 'column',
-                    gap: '16px',
+                    fontSize: '13px',
                     color: 'var(--text-muted)',
+                    fontStyle: 'italic',
                   }}
                 >
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      border: '3px solid var(--border)',
-                      borderTopColor: 'var(--accent)',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite',
-                    }}
-                  />
-                  <div style={{ fontSize: '13px' }}>Generating your pipeline export...</div>
-                  <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                  No API keys required for this pipeline.
                 </div>
-              )}
-
-              {!isLoading && error && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: '100%',
-                    flexDirection: 'column',
-                    gap: '12px',
-                    padding: '40px',
-                  }}
-                >
-                  <div style={{ fontSize: '13px', color: '#f43f5e', textAlign: 'center' }}>
-                    {error}
+              ) : (
+                requiredKeys.filter((key) => typeof key === 'string').map((key) => (
+                  <div key={key} style={{ marginBottom: '16px' }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: '12px',
+                        color: 'var(--text-primary)',
+                        marginBottom: '6px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                      }}
+                    >
+                      {key}
+                    </label>
+                    <input
+                      type="password"
+                      placeholder="Enter your API key..."
+                      value={apiKeys[key] || ''}
+                      onChange={(e) =>
+                        setApiKeys((prev) => ({
+                          ...prev,
+                          [key]: e.target.value,
+                        }))
+                      }
+                      style={{
+                        width: '100%',
+                        height: '40px',
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        padding: '0 12px',
+                        color: 'var(--text-primary)',
+                        fontSize: '13px',
+                        fontFamily: 'JetBrains Mono, monospace',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = 'var(--accent)';
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = 'var(--border)';
+                      }}
+                    />
                   </div>
-                  <button
-                    onClick={() => void generateExport()}
-                    style={{
-                      padding: '8px 18px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)',
-                      background: 'transparent',
-                      color: 'var(--text-primary)',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Retry
-                  </button>
-                </div>
+                ))
               )}
+            </div>
 
-              {!isLoading && !error && activeFile && (
-                <pre
-                  style={{
-                    margin: 0,
-                    padding: '24px',
-                    fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: '12px',
-                    lineHeight: '1.65',
-                    color: 'var(--text-primary)',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {activeFile.content}
-                </pre>
-              )}
+            <div
+              style={{
+                background: 'rgba(99, 102, 241, 0.1)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                borderRadius: '8px',
+                padding: '16px',
+                fontSize: '12px',
+                lineHeight: '1.6',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: '8px' }}>
+                💡 What's included:
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                <li>Production-ready Python code</li>
+                <li>.env file with your API keys</li>
+                <li>requirements.txt for dependencies</li>
+                <li>README with setup instructions</li>
+              </ul>
             </div>
           </div>
 
-          {/* Right: info + download */}
-          <div style={{ width: '280px', display: 'flex', flexDirection: 'column' }}>
-            <div
+          {/* Footer */}
+          <div
+            style={{
+              padding: '24px',
+              borderTop: '1px solid var(--border)',
+            }}
+          >
+            <button
+              onClick={handleDownload}
+              disabled={isLoading}
               style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '24px',
+                width: '100%',
+                height: '52px',
+                background: isLoading ? 'var(--accent)' : 'linear-gradient(135deg, var(--accent), #8b5cf6)',
+                border: 'none',
+                borderRadius: '10px',
+                color: 'white',
+                fontSize: '15px',
+                fontWeight: 700,
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                opacity: isLoading ? 0.6 : 1,
+                fontFamily: 'JetBrains Mono, monospace',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '20px',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                transition: 'all 0.3s ease',
+                boxShadow: isLoading
+                  ? 'none'
+                  : '0 4px 20px rgba(99, 102, 241, 0.4), 0 0 40px rgba(139, 92, 246, 0.3)',
+                animation: isLoading ? 'none' : 'pulse-glow 2s ease-in-out infinite',
+                letterSpacing: '0.03em',
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 30px rgba(99, 102, 241, 0.6), 0 0 60px rgba(139, 92, 246, 0.4)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(99, 102, 241, 0.4), 0 0 40px rgba(139, 92, 246, 0.3)';
               }}
             >
-              {/* What's included */}
-              <div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--text-muted)',
-                    marginBottom: '12px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px',
-                  }}
-                >
-                  What's included
-                </div>
-                {[
-                  { icon: '📋', name: 'pipeline.json', desc: 'Your pipeline schema' },
-                  { icon: '▶', name: 'run.py', desc: 'Entry point runner' },
-                  { icon: '⚙', name: 'forge_runner.py', desc: 'AI-generated engine' },
-                  { icon: '📖', name: 'README.md', desc: 'Setup instructions' },
-                ].map((f) => (
-                  <div
-                    key={f.name}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                      marginBottom: '12px',
-                    }}
-                  >
-                    <span style={{ fontSize: '16px', flexShrink: 0, marginTop: '1px' }}>{f.icon}</span>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '12px',
-                          fontFamily: 'JetBrains Mono, monospace',
-                          color: 'var(--text-primary)',
-                          marginBottom: '2px',
-                        }}
-                      >
-                        {f.name}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{f.desc}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Quick start */}
-              <div
-                style={{
-                  background: 'rgba(99, 102, 241, 0.08)',
-                  border: '1px solid rgba(99, 102, 241, 0.2)',
-                  borderRadius: '8px',
-                  padding: '14px',
-                  fontSize: '12px',
-                  lineHeight: '1.7',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'JetBrains Mono, monospace',
-                }}
-              >
-                <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px', fontFamily: 'inherit' }}>
-                  Quick start
-                </div>
-                <div>pip install anthropic</div>
-                <div>export ANTHROPIC_API_KEY=...</div>
-                <div>python run.py &apos;your input&apos;</div>
-              </div>
-            </div>
-
-            {/* Download button */}
-            <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border)' }}>
-              <button
-                onClick={() => void handleDownload()}
-                disabled={isLoading || files.length === 0}
-                style={{
-                  width: '100%',
-                  height: '46px',
-                  background: 'var(--accent)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: 'white',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: isLoading || files.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: isLoading || files.length === 0 ? 0.5 : 1,
-                  fontFamily: 'JetBrains Mono, monospace',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '10px',
-                  transition: 'filter 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isLoading && files.length > 0) e.currentTarget.style.filter = 'brightness(1.15)';
-                }}
-                onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
-              >
-                <span>📦</span>
-                <span>Download .zip</span>
-              </button>
-            </div>
+              <span style={{ fontSize: '18px' }}>📦</span>
+              <span>Download Project</span>
+            </button>
           </div>
         </div>
       </div>

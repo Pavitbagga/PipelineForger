@@ -63,30 +63,30 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
     setEdges(storeEdges);
   }, [storeEdges, setEdges]);
 
-  // Wrap onNodesChange to sync back TO store (BUG FIX #2)
+  // Sync React Flow nodes → Zustand store
+  useEffect(() => {
+    setStoreNodes(nodes);
+  }, [nodes, setStoreNodes]);
+
+  // Sync React Flow edges → Zustand store
+  useEffect(() => {
+    setStoreEdges(edges);
+  }, [edges, setStoreEdges]);
+
+  // Wrap onNodesChange - store sync happens in useEffect
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
       onNodesChange(changes);
-      // After React Flow processes the changes, sync back to store
-      setNodes((currentNodes) => {
-        setStoreNodes(currentNodes);
-        return currentNodes;
-      });
     },
-    [onNodesChange, setNodes, setStoreNodes]
+    [onNodesChange]
   );
 
-  // Wrap onEdgesChange to sync back TO store (BUG FIX #2)
+  // Wrap onEdgesChange - store sync happens in useEffect
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       onEdgesChange(changes);
-      // After React Flow processes the changes, sync back to store
-      setEdges((currentEdges) => {
-        setStoreEdges(currentEdges);
-        return currentEdges;
-      });
     },
-    [onEdgesChange, setEdges, setStoreEdges]
+    [onEdgesChange]
   );
 
   const onConnect = useCallback(
@@ -116,9 +116,7 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
       } as Edge;
 
       setEdges((eds) => {
-        const updatedEdges = addEdge(newEdge, eds);
-        setStoreEdges(updatedEdges);
-        return updatedEdges;
+        return addEdge(newEdge, eds);
       });
 
       addCopilotMessage({
@@ -126,7 +124,7 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
         text: result.message,
       });
     },
-    [nodes, setEdges, setStoreEdges, addCopilotMessage]
+    [nodes, setEdges, addCopilotMessage]
   );
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -143,58 +141,96 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
 
       // BUG FIX #1: Use screenToFlowPosition for accurate positioning
       // This accounts for zoom and pan transforms
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
+      // FAIL-SAFE: If coordinate conversion fails, use fallback position
+      let position;
+      try {
+        position = screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
 
-      const newNode: Node<NodeData> = {
-        id: `node_${Date.now()}`,
-        type,
-        position,
-        data: {
-          label: type.charAt(0).toUpperCase() + type.slice(1),
-          status: 'idle',
-          // Flat fields for node renderers and ConfigPanel (frontend names)
-          ...(type === 'input' && {
-            inputType: 'text',
-            placeholder: 'Enter your input...',
-          }),
-          ...(type === 'llm' && {
-            model: 'claude-sonnet' as const,
-            systemPrompt: 'You are a helpful assistant. Complete the task provided.',
-            temperature: 0.7,
-          }),
-          ...(type === 'tool' && {
-            toolType: 'search' as const,
-            parameters: {},
-          }),
-          ...(type === 'agent' && {
-            goal: 'Complete the task provided by the user.',
-            maxSteps: 3,
-            availableTools: [],
-          }),
-          ...(type === 'router' && {
-            condition: '',
-          }),
-          // ADD THIS: nested backend-ready config — single source of truth for
-          // serialisation. Never undefined after creation.
-          config: getDefaultConfig(type),
-        },
-      };
+        // Validate position is valid
+        if (!position || typeof position.x !== 'number' || typeof position.y !== 'number' ||
+            !isFinite(position.x) || !isFinite(position.y)) {
+          throw new Error('Invalid position calculated');
+        }
+      } catch (error) {
+        console.warn('[Canvas] screenToFlowPosition failed, using fallback position:', error);
+        // Fallback: Place node in center-ish area with slight randomness
+        position = {
+          x: 300 + Math.random() * 200,
+          y: 250 + Math.random() * 100,
+        };
+      }
 
-      // Update both React Flow state and Zustand store
-      setNodes((nds) => {
-        const updatedNodes = [...nds, newNode];
-        setStoreNodes(updatedNodes);
-        return updatedNodes;
-      });
-      addNode(newNode);
+      // FAIL-SAFE: Ensure node creation always succeeds
+      try {
+        const newNode: Node<NodeData> = {
+          id: `node_${Date.now()}`,
+          type,
+          position,
+          data: {
+            label: type.charAt(0).toUpperCase() + type.slice(1),
+            status: 'idle',
+            // Flat fields for node renderers and ConfigPanel (frontend names)
+            ...(type === 'input' && {
+              inputType: 'text',
+              placeholder: 'Enter your input...',
+            }),
+            ...(type === 'llm' && {
+              model: 'claude-sonnet' as const,
+              systemPrompt: 'You are a helpful assistant. Complete the task provided.',
+              temperature: 0.7,
+            }),
+            ...(type === 'tool' && {
+              toolType: 'search' as const,
+              parameters: {},
+            }),
+            ...(type === 'agent' && {
+              goal: 'Complete the task provided by the user.',
+              maxSteps: 3,
+              availableTools: [],
+            }),
+            ...(type === 'router' && {
+              condition: '',
+            }),
+            // ADD THIS: nested backend-ready config — single source of truth for
+            // serialisation. Never undefined after creation.
+            config: getDefaultConfig(type),
+          },
+          style: {
+            animation: 'fade-in-scale 0.4s ease-out',
+          },
+        };
 
-      addCopilotMessage({
-        role: 'claude',
-        text: `${type.toUpperCase()} node added. Click it to configure.`,
-      });
+        // Update React Flow state (Zustand sync happens in useEffect)
+        setNodes((nds) => {
+          return [...nds, newNode];
+        });
+        addNode(newNode);
+
+        addCopilotMessage({
+          role: 'claude',
+          text: `${type.toUpperCase()} node added. Click it to configure.`,
+        });
+      } catch (error) {
+        console.error('[Canvas] Node creation failed:', error);
+        // Last resort: create minimal node that will at least render
+        const minimalNode: Node<NodeData> = {
+          id: `node_${Date.now()}`,
+          type: type as any,
+          position,
+          data: {
+            label: type.charAt(0).toUpperCase() + type.slice(1),
+            status: 'idle',
+          },
+        };
+        setNodes((nds) => [...nds, minimalNode]);
+        addCopilotMessage({
+          role: 'system',
+          text: `${type.toUpperCase()} node added (minimal config). Please configure it manually.`,
+        });
+      }
     },
     [screenToFlowPosition, setNodes, setStoreNodes, addNode, addCopilotMessage]
   );
@@ -210,7 +246,13 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
     <div
       data-tour="canvas-area"
       ref={reactFlowWrapper}
-      style={{ flex: 1, background: 'var(--bg-canvas)', position: 'relative' }}
+      style={{
+        flex: 1,
+        background: theme === 'dark'
+          ? 'radial-gradient(ellipse at center, #1a1a3e20 0%, transparent 70%), radial-gradient(ellipse at center, #13131f 0%, var(--bg-canvas) 50%, #0a0a0f 100%)'
+          : 'radial-gradient(ellipse at center, rgba(79, 70, 229, 0.08) 0%, transparent 70%), radial-gradient(ellipse at center, #d8def5 0%, var(--bg-canvas) 50%, #b8bfe8 100%)',
+        position: 'relative',
+      }}
     >
       <ReactFlow
         nodes={nodes}
@@ -224,24 +266,19 @@ export const Canvas = ({ theme }: { theme?: 'dark' | 'light' }) => {
         nodeTypes={nodeTypes}
         fitView
         style={{
-          background: 'var(--bg-canvas)',
+          background: 'transparent',
         }}
       >
-        {/* Fine cross grid — structural layer */}
-        <Background
-          id="grid"
-          variant={BackgroundVariant.Cross}
-          gap={40}
-          size={14}
-          color={theme === 'light' ? 'rgba(79, 70, 229, 0.10)' : 'rgba(255, 255, 255, 0.04)'}
-        />
-        {/* Large accent dots — on every other grid intersection */}
+        {/* Animated dot grid */}
         <Background
           id="dots"
           variant={BackgroundVariant.Dots}
-          gap={80}
-          size={4}
-          color={theme === 'light' ? 'rgba(79, 70, 229, 0.35)' : 'rgba(99, 102, 241, 0.45)'}
+          gap={20}
+          size={1}
+          color={theme === 'light' ? 'rgba(79, 70, 229, 0.15)' : 'rgba(255, 255, 255, 0.08)'}
+          style={{
+            opacity: 1,
+          }}
         />
         <Controls
           style={{

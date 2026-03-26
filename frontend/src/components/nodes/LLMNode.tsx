@@ -1,10 +1,22 @@
-import { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { memo, useState } from 'react';
+import { Handle, Position, type NodeProps, useReactFlow } from '@xyflow/react';
 import type { NodeData } from '../../store/pipelineStore';
+import { EthicsWarningBadge } from '../EthicsWarningBadge';
+import { useEthicsRisks } from '../../hooks/useEthicsRisks';
 
-const LLMNode = ({ data: rawData, selected }: NodeProps) => {
+const LLMNode = ({ data: rawData, selected, id }: NodeProps) => {
   const data = rawData as NodeData;
   const color = '#6366f1';
+  const isRunning = data.status === 'running';
+  const [isHovered, setIsHovered] = useState(false);
+  const { deleteElements } = useReactFlow();
+  const { getRiskForNode } = useEthicsRisks();
+  const ethicsRisk = getRiskForNode(id);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteElements({ nodes: [{ id }] });
+  };
 
   const modelNames: Record<string, string> = {
     'claude-sonnet': 'Claude Sonnet',
@@ -17,13 +29,75 @@ const LLMNode = ({ data: rawData, selected }: NodeProps) => {
       style={{
         background: 'var(--bg-card)',
         border: `1px solid ${selected ? color : 'var(--border)'}`,
-        borderLeft: `3px solid ${color}`,
+        borderLeft: `4px solid ${color}`,
         borderRadius: '8px',
         padding: '12px',
         minWidth: '180px',
-        boxShadow: selected ? `0 0 0 2px ${color}40` : 'none',
+        boxShadow: selected
+          ? `0 0 0 2px ${color}, 0 0 20px ${color}40`
+          : `inset 4px 0 8px ${color}15`,
+        transition: 'all 0.2s ease',
+        animation: isRunning ? 'shimmer 2s linear infinite' : 'none',
+        backgroundImage: isRunning
+          ? `linear-gradient(90deg, transparent, ${color}15, transparent)`
+          : 'none',
+        backgroundSize: '200% 100%',
+        position: 'relative',
+      }}
+      onMouseEnter={(e) => {
+        setIsHovered(true);
+        if (!selected) {
+          e.currentTarget.style.boxShadow = `0 0 20px ${color}20, inset 4px 0 8px ${color}15`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        setIsHovered(false);
+        if (!selected) {
+          e.currentTarget.style.boxShadow = `inset 4px 0 8px ${color}15`;
+        }
       }}
     >
+      {/* Ethics Warning Badge */}
+      <EthicsWarningBadge risk={ethicsRisk} />
+
+      {/* Delete button */}
+      {(isHovered || selected) && (
+        <button
+          onClick={handleDelete}
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            width: '20px',
+            height: '20px',
+            borderRadius: '50%',
+            border: '2px solid var(--bg-panel)',
+            background: '#f43f5e',
+            color: 'white',
+            fontSize: '12px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            lineHeight: 1,
+            zIndex: 10,
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(244, 63, 94, 0.3)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(244, 63, 94, 0.5)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(244, 63, 94, 0.3)';
+          }}
+        >
+          ×
+        </button>
+      )}
       {/* Input Handle */}
       <Handle
         type="target"
@@ -33,6 +107,7 @@ const LLMNode = ({ data: rawData, selected }: NodeProps) => {
           width: '10px',
           height: '10px',
           border: '2px solid var(--bg-panel)',
+          left: '-6px',
         }}
       />
 
@@ -44,7 +119,7 @@ const LLMNode = ({ data: rawData, selected }: NodeProps) => {
           textTransform: 'uppercase',
           color: 'var(--text-muted)',
           marginBottom: '6px',
-          letterSpacing: '0.5px',
+          letterSpacing: '0.12em',
         }}
       >
         LLM
@@ -94,7 +169,7 @@ const LLMNode = ({ data: rawData, selected }: NodeProps) => {
                 : data.status === 'error'
                 ? 'var(--error)'
                 : 'var(--text-muted)',
-            animation: data.status === 'running' ? 'pulse 1.5s infinite' : 'none',
+            animation: data.status === 'running' ? 'pulse-dot 1.5s infinite' : 'none',
           }}
         />
         <span
@@ -116,17 +191,10 @@ const LLMNode = ({ data: rawData, selected }: NodeProps) => {
           width: '10px',
           height: '10px',
           border: '2px solid var(--bg-panel)',
+          right: '-6px',
         }}
       />
 
-      <style>
-        {`
-          @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-          }
-        `}
-      </style>
     </div>
   );
 };
